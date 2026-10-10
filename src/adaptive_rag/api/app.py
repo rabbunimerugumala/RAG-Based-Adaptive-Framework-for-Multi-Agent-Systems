@@ -1,6 +1,6 @@
 """FastAPI application. Interactive OpenAPI docs: http://127.0.0.1:8000/docs
 
-Local academic prototype: there is no authentication. Do not expose this server to untrusted networks.
+Local prototype: there is no authentication. Do not expose this server to untrusted networks.
 """
 
 from __future__ import annotations

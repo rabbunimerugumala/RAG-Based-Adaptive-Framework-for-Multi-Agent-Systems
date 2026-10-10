@@ -125,7 +125,7 @@ knowledge base is rebuilt automatically from the stored original files.
 | Ollama for the LLM | Handles quantisation (Q4_K_M), GPU/CPU split and Windows setup in one installer. |
 | Embeddings and NLI on CPU | Keeps the small GPU free for the LLM. |
 | Qdrant **local mode** | Real vector database API without running a server; persists to a folder. |
-| BM25 written in-house | 40 lines, no edge cases with tiny corpora, viva-friendly. |
+| BM25 written in-house | 40 lines, no edge cases with tiny corpora, easy to explain. |
 | Rules where rules suffice | Planner, confidence and most of verification are deterministic and testable. |
 | Dev mode | Lets anyone run the UI and all unit tests without downloads, clearly labelled. |
 

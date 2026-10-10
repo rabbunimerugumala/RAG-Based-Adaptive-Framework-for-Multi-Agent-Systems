@@ -1,7 +1,5 @@
 # RAG-Based Adaptive Framework for Multi-Agent Systems
 
-**Final-year B.Tech (CSE) research prototype** · Developer: **Rabbuni, RcubiX Technologies**
-
 An evidence-grounded question-answering system that compares two approaches on your own documents:
 
 | | Standard RAG (baseline) | Adaptive Multi-Agent RAG (proposed) |
@@ -33,7 +31,7 @@ Everything runs **locally on a Windows laptop** (tested: 32 GB RAM, RTX 3050 Lap
 | [docs/results.md](docs/results.md) | The actual benchmark results obtained, with interpretation |
 | [docs/testing.md](docs/testing.md) | Test suite: what is mocked, what uses real models, how to run |
 | [docs/limitations_and_future_work.md](docs/limitations_and_future_work.md) | Known limitations and possible extensions |
-| [docs/viva_guide.md](docs/viva_guide.md) | Likely viva/presentation questions with short answers |
+| [docs/faq.md](docs/faq.md) | Frequently asked questions about the design and results, plus a demo script |
 
 ---
 

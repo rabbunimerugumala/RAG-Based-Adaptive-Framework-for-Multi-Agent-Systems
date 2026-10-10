@@ -2,7 +2,7 @@
   "name": "smoke_test",
   "title": "Synthetic smoke-test set (fictional entities)",
   "description": "24 hand-written questions over 8 short fictional documents (18 answerable, 6 deliberately unanswerable). Entities are invented so answers cannot come from a model's memorised knowledge. Used to verify that the pipeline works end to end. It is NOT a recognised research benchmark and results on it must not be reported as such.",
-  "source": "Written for this project by the developer (Rabbuni, RcubiX Technologies).",
+  "source": "Written for this project.",
   "license": "Same as the project (MIT).",
   "synthetic": true,
   "answer_matching": "normalised alias containment and exact match (SQuAD-style normalisation)"

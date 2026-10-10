@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "adaptive-rag"
 version = "0.1.0"
 description = "RAG-Based Adaptive Framework for Multi-Agent Systems - Standard RAG vs. a four-agent adaptive RAG (research prototype)"
-authors = [{ name = "Rabbuni, RcubiX Technologies" }]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }

@@ -107,7 +107,7 @@ designed before testing.
 
 ---
 
-## 3. Summary for the report
+## 3. Summary
 
 - The four-agent pipeline, traces, retries and abstention work as designed (verified by tests and the smoke set).
 - On a 100-question TriviaQA-unfiltered sample with a 4B local model, the adaptive pipeline was **more cautious and

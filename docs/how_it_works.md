@@ -1,6 +1,6 @@
 # How It Works — a plain-language guide
 
-This page explains the whole project step by step, assuming only basic CSE knowledge.
+This page explains the whole project step by step, assuming only basic computer-science knowledge.
 
 ---
 
@@ -157,7 +157,7 @@ correct abstention on unanswerable questions, wrong abstention on answerable one
 latency and number of LLM calls. See [evaluation_protocol.md](evaluation_protocol.md) and the actual numbers in
 [results.md](results.md).
 
-## 8. Key takeaways for the viva
+## 8. Key takeaways
 
 - RAG grounds answers in documents; our framework adds **checking** (Verifier), **scoring** (Confidence) and
   **adaptive behaviour** (retry/abstain).

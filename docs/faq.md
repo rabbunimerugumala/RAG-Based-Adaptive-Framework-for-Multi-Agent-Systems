@@ -1,6 +1,6 @@
-# Viva / Presentation Guide
+# Frequently Asked Questions
 
-Short, honest answers to questions examiners commonly ask. Read [how_it_works.md](how_it_works.md) first.
+Short, honest answers to common questions about the design and results. Read [how_it_works.md](how_it_works.md) first.
 
 ## A. Concept
 

@@ -140,7 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
         <footer className="border-t border-border px-4 py-4 text-center text-xs text-subtle sm:px-6">
-          RAG-Based Adaptive Framework for Multi-Agent Systems · Rabbuni, RcubiX Technologies · Local research prototype
+          RAG-Based Adaptive Framework for Multi-Agent Systems · Local research prototype
         </footer>
       </div>
     </div>
