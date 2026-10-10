@@ -1,0 +1,24 @@
+College Central Library - Rules for Students (sample document)
+This is a fictional sample document created for this project.
+
+1. Opening hours
+The central library is open from 8:00 AM to 9:00 PM on weekdays and from 9:00 AM to 5:00 PM on Saturdays.
+The library is closed on Sundays and on public holidays.
+
+2. Borrowing
+Undergraduate students may borrow up to 4 books at a time for a period of 14 days.
+Postgraduate students may borrow up to 6 books for 21 days.
+Reference books, journals and project reports cannot be taken out of the library.
+
+3. Renewal and fines
+A book may be renewed once if no other student has reserved it.
+A fine of 2 rupees per day is charged for each overdue book.
+Lost books must be replaced, or the student must pay twice the current price of the book.
+
+4. Digital resources
+Students can access e-journals from the campus network using their college email ID.
+Off-campus access requires the library VPN, which can be requested at the help desk.
+
+5. Conduct
+Mobile phones must be kept on silent mode. Food is not allowed inside the reading hall.
+Group discussion is permitted only in the discussion rooms on the first floor.

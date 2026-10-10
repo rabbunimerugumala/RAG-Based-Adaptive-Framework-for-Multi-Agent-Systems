@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets / local configuration
+.env
+
+# Generated at runtime: indexes, uploaded files, saved runs, model cache (re-created automatically)
+data/runtime/
+
+# Downloaded benchmark data (third-party content - re-create with evaluation/prepare_triviaqa.py)
+data/datasets/triviaqa_unfiltered_sample/
+
+# Benchmark outputs (re-create with evaluation/run_benchmark.py; summarised in docs/results.md)
+evaluation/results/*
+!evaluation/results/.gitkeep
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+frontend/*.tsbuildinfo
+frontend/.env*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

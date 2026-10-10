@@ -1,0 +1,24 @@
+{"id": "q01", "question": "Who founded Varnholm?", "answers": ["Edda Larsk"], "answerable": true, "gold_doc_ids": ["varnholm_history"], "type": "factoid"}
+{"id": "q02", "question": "In what year was Varnholm founded?", "answers": ["1847"], "answerable": true, "gold_doc_ids": ["varnholm_history"], "type": "numeric"}
+{"id": "q03", "question": "What is the energy density of the Kestrel-9 battery?", "answers": ["165 Wh/kg", "165 Wh per kg", "165"], "answerable": true, "gold_doc_ids": ["kestrel9_battery"], "type": "numeric"}
+{"id": "q04", "question": "How many full charge cycles can the Kestrel-9 complete before dropping to 80 percent capacity?", "answers": ["4,000", "4000"], "answerable": true, "gold_doc_ids": ["kestrel9_battery"], "type": "numeric"}
+{"id": "q05", "question": "What do adult Aurelian moths feed on?", "answers": ["nectar of night-blooming tobacco", "night-blooming tobacco"], "answerable": true, "gold_doc_ids": ["aurelian_moth"], "type": "factoid"}
+{"id": "q06", "question": "What is the storage capacity of Brightwater Reservoir?", "answers": ["48 million cubic metres", "48 million cubic meters", "48 million"], "answerable": true, "gold_doc_ids": ["brightwater_reservoir"], "type": "numeric"}
+{"id": "q07", "question": "Which TCP port do Quillon servers listen on by default?", "answers": ["7425"], "answerable": true, "gold_doc_ids": ["quillon_protocol"], "type": "numeric"}
+{"id": "q08", "question": "Who created the Quillon messaging protocol?", "answers": ["Mara Ostberg"], "answerable": true, "gold_doc_ids": ["quillon_protocol"], "type": "factoid"}
+{"id": "q09", "question": "What is the highest peak in the Halden Highlands?", "answers": ["Mount Tervel", "Tervel"], "answerable": true, "gold_doc_ids": ["halden_highlands"], "type": "factoid"}
+{"id": "q10", "question": "Who is the chief executive officer of Orvane Labs?", "answers": ["Ilse Marrow"], "answerable": true, "gold_doc_ids": ["orvane_labs"], "type": "factoid"}
+{"id": "q11", "question": "When does the Lantern Fair take place each year?", "answers": ["second weekend of October"], "answerable": true, "gold_doc_ids": ["lantern_fair"], "type": "factoid"}
+{"id": "q12", "question": "How high is the Brightwater dam?", "answers": ["61 metres", "61 meters", "61 m"], "answerable": true, "gold_doc_ids": ["brightwater_reservoir"], "type": "numeric"}
+{"id": "q13", "question": "Where is the Aurelian moth found?", "answers": ["Halden Highlands"], "answerable": true, "gold_doc_ids": ["aurelian_moth", "halden_highlands"], "type": "factoid"}
+{"id": "q14", "question": "Which company makes the Kestrel-9 and where is that company headquartered?", "answers": ["Orvane Labs"], "answerable": true, "gold_doc_ids": ["kestrel9_battery", "orvane_labs"], "type": "multi_part"}
+{"id": "q15", "question": "What is the difference between the Kestrel-9 and the Kestrel-12?", "answers": ["sodium-ion", "sodium ion"], "answerable": true, "gold_doc_ids": ["orvane_labs", "kestrel9_battery"], "type": "comparison"}
+{"id": "q16", "question": "In which year was the Varnholm town hall built?", "answers": ["1902"], "answerable": true, "gold_doc_ids": ["varnholm_history"], "type": "numeric"}
+{"id": "q17", "question": "What is the maximum size of a single Quillon message?", "answers": ["64 KB", "64KB", "64 kilobytes"], "answerable": true, "gold_doc_ids": ["quillon_protocol"], "type": "numeric"}
+{"id": "q18", "question": "How many people does Orvane Labs employ?", "answers": ["340"], "answerable": true, "gold_doc_ids": ["orvane_labs"], "type": "numeric"}
+{"id": "u01", "question": "What is the population of the city of Tessaly?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}
+{"id": "u02", "question": "Which engineering firm designed the Brightwater dam?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}
+{"id": "u03", "question": "What is the retail price of a Kestrel-9 battery module?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}
+{"id": "u04", "question": "How long does the Aurelian moth caterpillar stage last?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}
+{"id": "u05", "question": "Which encryption algorithm does the Quillon protocol use?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}
+{"id": "u06", "question": "Who won the lantern design contest at the 2022 Lantern Fair?", "answers": [], "answerable": false, "gold_doc_ids": [], "type": "unanswerable"}

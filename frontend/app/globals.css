@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/* Class-based dark mode, driven by next-themes (<html class="dark">). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Semantic design tokens. Components use ONLY these (via the Tailwind colour
+   utilities below), never raw hex values, so both themes stay consistent.
+   --------------------------------------------------------------------------- */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e2e5ea;
+  --border-strong: #cdd2da;
+  --text: #151a22;
+  --muted: #5a6371;
+  --subtle: #8a93a1;
+  --accent: #2357c6;
+  --accent-hover: #1c49a8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e9effb;
+  --success: #17703f;
+  --success-soft: #e6f4ec;
+  --warning: #8a5a00;
+  --warning-soft: #fdf3dc;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --code-bg: #f3f4f7;
+  /* chart series (validated: scripts/validate_palette.js, light surface) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --grid: #e7e9ee;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0d1015;
+  --surface: #151a21;
+  --surface-2: #1b2129;
+  --border: #272e38;
+  --border-strong: #353e4b;
+  --text: #e6e9ee;
+  --muted: #a0a9b6;
+  --subtle: #747e8c;
+  --accent: #7aa2ff;
+  --accent-hover: #93b4ff;
+  --accent-fg: #0d1015;
+  --accent-soft: #1a2640;
+  --success: #5cc98f;
+  --success-soft: #12291d;
+  --warning: #e3b252;
+  --warning-soft: #2c2412;
+  --danger: #f07a70;
+  --danger-soft: #2f1716;
+  --code-bg: #10141a;
+  /* chart series (validated against #151a21) */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --grid: #252c35;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-code: var(--code-bg);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
