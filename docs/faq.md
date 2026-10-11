@@ -5,8 +5,8 @@ Short, honest answers to common questions about the design and results. Read [ho
 ## A. Concept
 
 **1. What is your project in one sentence?**
-A local question-answering system over your own documents that compares Standard RAG with an adaptive pipeline of four
-agents which plan the search, gather evidence, verify the answer claim by claim, and then accept, retry or abstain.
+An adaptive Multi-Agent RAG system: four cooperating agents plan the search, gather and filter evidence, verify the
+answer claim by claim, and then answer, retrieve again or abstain; Standard RAG is kept as the comparison baseline.
 
 **2. What is RAG and why is it needed?**
 Retrieval-Augmented Generation first retrieves relevant passages from a document collection and then asks an LLM to
@@ -17,18 +17,22 @@ It trusts whatever the retriever returns and whatever the LLM writes. Nobody che
 and it rarely says "I don't know".
 
 **4. What are your four agents?**
-Planner (understand the question and plan the search), Evidence (hybrid retrieval with fusion), Verifier (check each
-claim against the evidence with lexical checks and an NLI model), Confidence (score and decide accept/retry/abstain).
+Planner (analyse the question, plan the search and the evidence budget), Evidence (hybrid retrieval; on escalation,
+MAIN-RAG-style LLM judging, adaptive-threshold filtering and ranking), Verifier (check each claim with lexical checks,
+an NLI model and the judge), Confidence (score and decide: answer, retrieve again, or abstain).
 
 **5. Are they really separate agents or just prompts?**
-They are separate Python classes with different inputs, outputs and logic (`src/adaptive_rag/agents/`). Only the answer
-generation and the Planner's retry query rewrite use the LLM; the other work is retrieval, NLI and deterministic rules.
-They share one LLM instance to fit in 4 GB of VRAM.
+They are separate Python classes with different inputs, outputs and logic (`src/adaptive_rag/agents/`). The LLM is
+used for the draft answer, as the Evidence Agent's judge (only on escalation), to confirm short answers or cross-check
+contradictions in the Verifier, and for the Planner's retry queries. All roles share one LLM instance (4 GB VRAM).
 
 **6. How is this different from MAIN-RAG (ACL 2025)?**
-MAIN-RAG uses three LLM agents to filter and score retrieved documents before answering. Our design has four roles,
-verifies the *answer* (not only the documents) with an NLI model, and adds a confidence-driven retry/abstain loop. We
-treat MAIN-RAG as related work, not something we re-implemented.
+MAIN-RAG (Predictor, Judge, Final-Predictor) scores every retrieved document with log P(Yes) − log P(No), keeps those
+above the per-query mean score and orders them. We use exactly that score and threshold inside our Evidence Agent, but
+(a) by default the judge sees (document, question) pairs instead of the paper's (document, question, answer) triplets,
+(b) filtering runs only when the Confidence Agent asks for more evidence, and (c) we add claim verification, a
+confidence score, retries and abstention, which MAIN-RAG does not have. It is not a reproduction; see
+[main_rag_alignment.md](main_rag_alignment.md).
 
 ## B. Techniques
 
@@ -118,3 +122,25 @@ Calibrate confidence on labelled data, run larger benchmarks with confidence int
 5. Compare: "What is the fine for an overdue book?" → side-by-side cost (LLM calls, latency).
 6. Evaluation: open the saved TriviaQA run → chart, metrics table, per-question outcomes, CSV download; explain the honest result.
 7. Toggle dark mode.
+
+
+## E. The v2 upgrade
+
+**25. What changed between v1 and v2, and why?**
+The original v1 lost accuracy against Standard RAG on TriviaQA because the verifier wrongly rejected correct short
+answers (NLI "contradictions" from ill-formed hypotheses and off-topic passages). v2 fixes the verifier (grounded
+contradictions, judge-confirmed short answers, corroborated contradictions), adds the MAIN-RAG-style evidence filter
+on escalation, and selects verified attempts first. All changes are switchable, so v1 can still be reproduced.
+
+**26. How do you make sure the improvement is not just tuning to the test?**
+All design decisions were made on a development set (TriviaQA questions 1–100). The code was frozen (git commit
+`808ef33`) and then evaluated once on 199 different questions (101–300). Thresholds and weights were not tuned.
+
+**27. Why is filtering not applied on every round like in the paper?**
+On the development set, filtering every round kept only 2–4 passages and sometimes removed the one with the answer,
+and it cost ~14 LLM calls per question. Running it only when confidence is low kept the round-1 evidence identical to
+Standard RAG and roughly halved the cost.
+
+**28. Is the confidence score a probability?**
+No. It is a weighted heuristic of four normalised signals; the evidence-relevance part comes from the LLM judge, the
+other parts from coverage and the Verifier. It has not been calibrated.

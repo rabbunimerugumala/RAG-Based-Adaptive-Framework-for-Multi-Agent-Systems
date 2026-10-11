@@ -1,5 +1,15 @@
 # Results
 
+This file has three parts, kept separate on purpose:
+
+* **Part A — original baseline (v1)**, 2026-10-10: unchanged from the first report (with audit notes appended).
+* **Part B — v2 development** on the development set (TriviaQA questions 1–100), used to make design decisions.
+* **Part C — held-out test** of the frozen v2 code on 199 new questions (101–300): the final comparison.
+
+---
+
+# Part A — Original baseline (v1)
+
 All numbers below come from actual runs on 2026-10-10 in **real mode** on the development laptop
 (Windows 11, 32 GB RAM, RTX 3050 Laptop GPU 4 GB). Configuration: default `.env.example` values
 (top-k 5, chunk 900/150, weights 0.25/0.25/0.35/0.15, accept 0.65, abstain 0.40, max 2 retries, no reranker).
@@ -107,10 +117,49 @@ designed before testing.
 
 ---
 
-## 3. Summary
+## 3. Summary (Part A)
 
 - The four-agent pipeline, traces, retries and abstention work as designed (verified by tests and the smoke set).
 - On a 100-question TriviaQA-unfiltered sample with a 4B local model, the adaptive pipeline was **more cautious and
   more expensive, and less accurate**, because its verifier mislabels short correct answers as contradicted.
 - This is a useful, honest finding: answer verification is only as good as the verifier, and an over-strict verifier
   turns into unnecessary abstentions. Improving the verifier is the most promising next step.
+
+
+### Audit notes on Part A (added 2026-10-11; no number above was changed)
+
+An audit recomputed every Part A metric from the saved per-question rows: all numbers match. Corrections to wording:
+
+* The verifier label quoted for the 11 questions "Standard correct, Adaptive abstained" is the label of the
+  **best-scoring attempt selected by the Confidence Agent**, not necessarily the final attempt; v1 benchmark runs did
+  not save per-attempt drafts, so "the LLM reported insufficient evidence on every attempt" cannot be verified.
+* The short-answer examples ("Niger", "Brunei", "Seymour Hersh") are **Standard RAG's** saved answers; re-verifying
+  them with the v1 verifier reproduced the *contradicted* label in 5 of 6 cases (failure mechanism: ill-formed
+  "question? answer." NLI hypotheses on 43 of 100 questions, and maximum-contradiction over off-topic windows).
+* Adaptive's 18 wrong abstentions (23.7 %) = 11 where Standard was correct + 6 where both abstained + 1 where Standard
+  was wrong; Standard's 11 (14.5 %) = 6 + 4 + 1. The "11" in the failure analysis is the paired subset, not a total.
+* The p ≈ 0.08 is an **exact two-sided McNemar test** (binomial test on the 16 discordant questions: 12 vs 4,
+  p = 0.0768; mid-p 0.049). It is now produced by `evaluation/analyze_results.py`.
+* Evidence conditions were not identical even in round 1: v1 Adaptive searched with 2 query variants, Standard with 1.
+
+---
+
+# Part B — Multi-Agent RAG v2: development (TriviaQA questions 1–100)
+
+These runs informed design decisions, so they are **not** evidence of improvement. The Standard RAG reference is the
+Part A run `20261010-223619-6d2293` (same questions, model, settings; Standard RAG code unchanged).
+
+| Questions 1–100 | Standard (Part A) | MA v1 (Part A) | MA v2 iteration 1 | MA v2 iteration 2 (frozen) |
+|---|---|---|---|---|
+| Run | `20261010-223619-6d2293` | same | `20261011-110725-f69cff` | `20261011-115334-b96d4c` |
+| Accuracy (of 76 answerable) | 78.9 % (60) | 68.4 % (52) | 78.9 % (60) | 82.9 % (63) |
+| Wrong abstention | 14.5 % | 23.7 % | 13.2 % | 7.9 % |
+| Correct abstention (of 24) | 54.2 % | 54.2 % | 54.2 % | 54.2 % |
+| Mean LLM calls / question | 1.0 | 2.46 | 14.4 | 7.2 |
+| Mean / median latency | 4.4 / 4.0 s | 11.5 / 7.5 s | 25.4 / 18.4 s | 13.8 / 5.9 s |
+| Paired vs Standard (only-MA correct : only-Standard correct) | – | 4 : 12 | 5 : 5 | 5 : 2 (p = 0.45) |
+
+* **Iteration 1** (judge filtering on every round, grounded verifier, Confidence v2): recovered v1's accuracy loss but
+  first-round filtering kept only 2–4 of 10 passages and sometimes removed the answer passage; ~14 LLM calls/question.
+* **Iteration 2** (filtering only on escalation, NLI contradictions must be corroborated by the judge): the version
+  frozen at commit `808ef33` for Part C. No thresholds or weights were changed in either iteration.
