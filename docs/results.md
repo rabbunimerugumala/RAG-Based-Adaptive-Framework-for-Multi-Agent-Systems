@@ -232,3 +232,54 @@ Abstention on the 34 unanswerable questions: Standard and v2 differ on only 2 qu
 * Support/verified rates come from this project's own verifier; selective accuracy is *lower* for v2 than for v1 or
   the no-filter variant because v2 answers more of the hard questions.
 * Results are not comparable with the MAIN-RAG paper's numbers (different model, retriever, corpus and sample).
+
+---
+
+# Part D — Question routing, and a same-session re-run (held-out questions 101–300)
+
+Run `20261011-171730-9902e7` · 2026-10-11 · same 199 held-out questions, corpus, model and settings · 3 systems
+interleaved per question in one session · 0 failed cases · runtime 2 h 1 min · code `57aef61` (recorded at start).
+Routing was designed on the development set only (Part B data); the held-out results of Part C are unchanged.
+
+| Metric | Standard RAG | Multi-Agent v2 | **v2 + question routing** |
+|---|---|---|---|
+| Accuracy (of 165 answerable) | 69.1 % (114) | 72.7 % (120) | **73.3 % (121)** |
+| Wrong abstention | 19.4 % (32) | 13.9 % (23) | 13.9 % (23) |
+| Correct abstention (of 34) | 76.5 % (26) | 79.4 % (27) | 79.4 % (27) |
+| Unsupported-answer rate (answered) | 19.1 % | 19.5 % | 18.8 % |
+| Grounded answers (lexical, verifier-independent) | 83.0 % | 85.2 % | 83.9 % |
+| Citation correctness | 94.0 % | 94.4 % | 94.4 % |
+| Evidence precision / recall | 54.7 % / 92.1 % | 59.5 % / 95.2 % | 58.9 % / 93.9 % |
+| Mean / median latency | 3.7 / 3.4 s | 16.4 / 6.8 s | **12.1 / 6.9 s** |
+| Mean LLM calls | 1.00 | 9.47 | **7.48** |
+| Mean retrieval rounds | 1.00 | 1.72 | 1.44 |
+| Response consistency (20 repeats) | 85 % | 100 % | 95 % |
+
+Routes chosen: 194 simple (mean 7.2 LLM calls; 114 answered in one round, 80 escalated once), 5 complex (16.8 calls).
+
+| Paired comparison (exact two-sided McNemar, 165 answerable) | only first correct | only second correct | p |
+|---|---|---|---|
+| Standard vs Multi-Agent v2 | 3 | 9 | 0.146 |
+| Standard vs v2 + routing | 2 | 9 | 0.065 |
+| v2 vs v2 + routing | 0 | 1 | 1.0 |
+
+### Findings (measured)
+
+1. **Routing keeps accuracy and reduces cost.** v2 + routing matched v2 on 164 of 165 answerable questions, with
+   **21 % fewer LLM calls** (7.48 vs 9.47) and **26 % lower mean latency** (12.1 vs 16.4 s); abstention behaviour was
+   identical. Saying routing is *more accurate* than v2 is not supported (1 vs 0 questions).
+2. **The advantage over Standard RAG did not reach significance in this re-run.** Both multi-agent variants again
+   answered more questions correctly than Standard RAG (+3.6 and +4.2 points; 9 vs 3 and 9 vs 2 discordant
+   questions), but p = 0.146 and p = 0.065 are above 0.05.
+3. **The Part C result (p = 0.021) is therefore not robust on its own.** Ollama generation is not fully deterministic
+   (Standard RAG gave the same answer in only 17 of 20 repeats), so the same questions produced Standard 112 → 114
+   and v2 122 → 120 correct between the two runs. Across both held-out runs the direction is the same (Multi-Agent
+   ahead by 3.6–6.1 points, fewer wrong abstentions), but a significant improvement at the 5 % level was observed in
+   one of two runs. More questions are needed for a firm conclusion.
+4. Faithfulness indicators (grounded answers, unsupported-answer rate, citation correctness) are similar across the
+   three systems; the multi-agent systems mainly answer more answerable questions rather than answer more faithfully.
+
+### Hardware profiles
+
+The `8gb` profile (qwen2.5:1.5b, no NLI) was only checked for functionality on 8 smoke-test questions (backend
+~0.3 GB RAM, model 1.1 GB, 0 failures); its accuracy was not benchmarked. The `16gb` profile was not run separately.

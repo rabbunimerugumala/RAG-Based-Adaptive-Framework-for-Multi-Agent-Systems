@@ -8,13 +8,13 @@ is kept as the baseline for fair comparison.
 Everything runs **locally on a Windows laptop** (tested: 32 GB RAM, RTX 3050 Laptop GPU 4 GB). No paid APIs, no
 Docker, no cloud.
 
-> **Measured result (held-out test, 199 TriviaQA questions never used during development):** Multi-Agent RAG v2
-> answered **73.9 %** of answerable questions correctly vs **67.9 %** for Standard RAG (13 vs 3 discordant questions,
-> exact McNemar **p = 0.021**), with fewer wrong refusals (13.9 % vs 19.4 %) and the same correct-abstention rate —
-> at **4.2× the mean latency** and ~9 LLM calls per question. One dataset, one 4B model: see
-> [docs/results.md](docs/results.md) for every number, the ablations and the limitations.
-> The system reduces, but does not eliminate, unsupported answers; its confidence score is a heuristic, not a
-> calibrated probability.
+> **Measured results (held-out TriviaQA questions never used during development, two runs):** Multi-Agent RAG v2
+> answered more answerable questions correctly than Standard RAG in both runs — 73.9 % vs 67.9 % (p = 0.021) and
+> 72.7 % vs 69.1 % (p = 0.146, exact McNemar) — mainly through fewer wrong refusals, at 4–4.5× the mean latency.
+> The improvement was significant in one of the two runs, so it is promising but not yet conclusive. An optional
+> **question-routing** mode kept the same accuracy (73.3 %) with 21 % fewer LLM calls. One dataset, one 4B model:
+> see [docs/results.md](docs/results.md). The system reduces, but does not eliminate, unsupported answers; its
+> confidence score is a heuristic, not a calibrated probability.
 
 ---
 

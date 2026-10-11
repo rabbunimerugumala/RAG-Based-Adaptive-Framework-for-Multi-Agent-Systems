@@ -71,6 +71,23 @@ minutes; later starts take about 10–30 seconds.
 Low-memory alternatives: `ARAG_OLLAMA_MODEL=qwen2.5:1.5b` (pull it first), `ARAG_OLLAMA_NUM_GPU=0` for CPU-only,
 or `ARAG_NLI_BACKEND=none` to skip the NLI model.
 
+## 5b. Hardware profiles (8 / 16 / 32 GB RAM)
+
+Set one variable; it only fills settings you did not set yourself.
+
+| `ARAG_HARDWARE_PROFILE` | LLM | Context | NLI verifier | Judge pool | Question routing | Status |
+|---|---|---|---|---|---|---|
+| `32gb` (default) | qwen3:4b-instruct-2507 (Q4) | 4096 | on | 10 | off | used for all reported benchmarks |
+| `16gb` | qwen3:4b-instruct-2507 (Q4) | 3072 | on | 8 | on | not separately benchmarked; estimated from the 32 GB measurements (Ollama ~3.5 GB, backend 0.6–1.0 GB) |
+| `8gb` | qwen2.5:1.5b (~1 GB download, `ollama pull qwen2.5:1.5b`) | 2048 | off (lexical + judge checks) | 6 | on | functional check only: backend ~0.3 GB, model 1.1 GB; quality not benchmarked |
+
+```powershell
+$env:ARAG_HARDWARE_PROFILE = "8gb"; ollama pull qwen2.5:1.5b
+uvicorn adaptive_rag.api.app:app --port 8000
+```
+
+On an 8 GB laptop close other heavy applications; the smaller model answers less accurately than the 4B model.
+
 ## 6. Frontend
 
 ```powershell
