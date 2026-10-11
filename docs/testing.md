@@ -5,7 +5,7 @@
 | Check | Command | Latest result |
 |---|---|---|
 | Unit + API tests (mocked / dev models) | `pytest` | **134 passed**, 4 skipped (the opt-in real-model tests) |
-| Real-model integration tests | `$env:ARAG_RUN_REAL_MODEL_TESTS="1"; pytest -m real_model` | see [results.md](results.md) §6 for the run on the final code |
+| Real-model integration tests | `$env:ARAG_RUN_REAL_MODEL_TESTS="1"; pytest -m real_model` | **4 passed** (28 s) on the final code |
 | Python lint | `ruff check src tests evaluation` | no issues |
 | Frontend type check / lint / build | `cd frontend; npx tsc --noEmit; npm run lint; npm run build` | no issues; 7 routes prerendered |
 | UI check | headless Microsoft Edge screenshots of Ask, Agent Trace, Evaluation, Overview (light and dark) against a running backend in dev mode | pages render real backend data; see notes below |
