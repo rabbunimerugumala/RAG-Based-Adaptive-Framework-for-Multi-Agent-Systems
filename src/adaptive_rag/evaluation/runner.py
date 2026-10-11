@@ -16,16 +16,64 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from adaptive_rag.config import Settings
+from adaptive_rag import __version__
+from adaptive_rag.config import LEGACY_V1, Settings
 from adaptive_rag.evaluation.datasets import load_dataset
 from adaptive_rag.evaluation.metrics import aggregate, contains_answer, exact_match, token_f1
 from adaptive_rag.models import ModelBundle
 from adaptive_rag.pipeline import RAGSystem
 from adaptive_rag.retrieval.store import KnowledgeBase
+from adaptive_rag.text import content_terms, normalize_answer, strip_citations
 
 CSV_FIELDS = ["question_id", "method", "question", "answerable", "type", "status", "abstained", "correct", "em",
-              "f1", "cited_gold", "evidence_has_answer", "verification", "support_score", "confidence",
-              "latency_ms", "llm_calls", "nli_calls", "retrieval_attempts", "answer", "gold_answers", "error"]
+              "f1", "cited_gold", "evidence_has_answer", "evidence_precision", "grounded", "support_level",
+              "verification", "support_score", "confidence", "latency_ms", "llm_calls", "nli_calls",
+              "retrieval_attempts", "passages_used", "passages_filtered", "answer", "gold_answers", "error"]
+
+# Evaluated systems. Every variant shares the same knowledge base, retriever, embedder, generator, NLI model and
+# questions; only the listed settings differ. "adaptive" is the proposed v2 multi-agent system.
+VARIANTS: dict[str, tuple[str, dict]] = {
+    "standard": ("standard", {}),
+    "adaptive": ("adaptive", {}),
+    "adaptive_no_retry": ("adaptive", {"max_retries": 0}),
+    "adaptive_no_filter": ("adaptive", {"doc_filter": "off"}),
+    "adaptive_v1": ("adaptive", dict(LEGACY_V1)),
+}
+VARIANT_LABELS = {
+    "standard": "Standard RAG (baseline)",
+    "adaptive": "Multi-Agent RAG v2 (proposed, full)",
+    "adaptive_no_retry": "Multi-Agent v2 without adaptive retries",
+    "adaptive_no_filter": "Multi-Agent v2 without evidence filtering",
+    "adaptive_v1": "Multi-Agent v1 (original pipeline)",
+}
+
+
+def grounded_answer(answer: str, passages: list[str], min_share: float = 0.8) -> bool:
+    """Verifier-independent lexical groundedness: >= 80% of the answer's content terms occur in the passages."""
+    terms = set(content_terms(strip_citations(answer)))
+    if not terms:
+        return False
+    text_terms: set[str] = set()
+    for p in passages:
+        text_terms.update(content_terms(p))
+    return len(terms & text_terms) / len(terms) >= min_share
+
+
+def attempt_log(resp) -> list[dict]:
+    """Per-attempt drafts and decisions, taken from the real execution trace (for later error analysis)."""
+    log: dict[int, dict] = {}
+    for t in resp.trace:
+        a = log.setdefault(t.attempt, {"attempt": t.attempt})
+        if t.step == "generator":
+            a["draft"] = t.output.get("answer")
+            a["insufficient"] = t.output.get("insufficient")
+        elif t.step == "verifier":
+            a["verification"] = t.decision
+        elif t.step == "confidence" and "final" not in t.title:
+            a["decision"], a["score"] = t.decision, t.output.get("score")
+        elif t.step == "evidence":
+            a["evidence_decision"] = t.decision
+    return list(log.values())
 
 
 class EvaluationCancelled(Exception):
@@ -53,7 +101,16 @@ def score_row(q: dict, method: str, resp) -> dict:
     gold_docs = set(q.get("gold_doc_ids", []))
     cited_docs = {c.doc_id for c in resp.citations if c.valid}
     v = resp.verification
+    cited_refs = {c.ref for c in resp.citations if c.valid}
+    cited_text = [e.text for e in resp.evidence if e.ref in cited_refs] or [e.text for e in resp.evidence]
     return {
+        "evidence_precision": (round(sum(contains_answer(e.text, golds) for e in resp.evidence) / len(resp.evidence), 4)
+                               if q["answerable"] and golds and resp.evidence else None),
+        "grounded": grounded_answer(resp.answer, cited_text) if not abstained else None,
+        "support_level": resp.support_level,
+        "passages_used": len(resp.evidence),
+        "passages_filtered": len(resp.filtered_evidence),
+        "attempts": attempt_log(resp),
         "question_id": q["id"], "method": method, "question": q["question"], "answerable": q["answerable"],
         "type": q.get("type", ""), "status": resp.status, "abstained": abstained,
         "correct": bool(q["answerable"] and not abstained and contains_answer(resp.answer, golds)),
@@ -74,8 +131,11 @@ def score_row(q: dict, method: str, resp) -> dict:
 def run_evaluation(
     settings: Settings, models: ModelBundle, dataset_name: str, methods: list[str], limit: int | None = None,
     seed: int = 0, progress: Callable[[int, int, dict], None] | None = None,
-    cancel: threading.Event | None = None, run_id: str | None = None,
+    cancel: threading.Event | None = None, run_id: str | None = None, repeat: int = 0,
 ) -> dict:
+    unknown = [m for m in methods if m not in VARIANTS]
+    if unknown:
+        raise ValueError(f"Unknown method(s) {unknown}; choose from {list(VARIANTS)}")
     dataset = load_dataset(settings.data_dir / "datasets", dataset_name)
     questions = select_questions(dataset.questions, limit, seed)
     run_id = run_id or f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
@@ -83,7 +143,8 @@ def run_evaluation(
     t0 = time.perf_counter()
     kb = open_benchmark_kb(settings, models, dataset)
     try:
-        system = RAGSystem(settings, kb, models.generator, models.nli, models.reranker)
+        systems = {m: (VARIANTS[m][0], RAGSystem(settings.model_copy(update=VARIANTS[m][1]), kb, models.generator,
+                                                 models.nli, models.reranker)) for m in methods}
         rows: list[dict] = []
         total = len(questions) * len(methods)
         for q in questions:
@@ -91,7 +152,8 @@ def run_evaluation(
                 if cancel is not None and cancel.is_set():
                     raise EvaluationCancelled()
                 try:
-                    resp = system.run(q["question"], method)
+                    pipeline, system = systems[method]
+                    resp = system.run(q["question"], pipeline)
                     row = score_row(q, method, resp)
                 except Exception as exc:  # recorded as a failed case, never silently dropped
                     row = {"question_id": q["id"], "method": method, "question": q["question"],
@@ -100,10 +162,30 @@ def run_evaluation(
                            "evidence_has_answer": None, "verification": None, "support_score": None,
                            "confidence": None, "latency_ms": 0.0, "llm_calls": 0, "nli_calls": 0,
                            "retrieval_attempts": 0, "answer": "", "gold_answers": q.get("answers", []),
+                           "evidence_precision": None, "grounded": None, "support_level": "none",
+                           "passages_used": 0, "passages_filtered": 0, "attempts": [],
                            "run_id": None, "error": f"{exc.__class__.__name__}: {exc}"}
                 rows.append(row)
                 if progress:
                     progress(len(rows), total, row)
+        # response consistency: re-run the first `repeat` questions and compare with the first run
+        consistency: dict[str, dict] = {}
+        for method in methods if repeat else []:
+            pipeline, system = systems[method]
+            first = {r["question_id"]: r for r in rows if r["method"] == method}
+            same_answer = same_status = n = 0
+            for q in questions[:repeat]:
+                if cancel is not None and cancel.is_set():
+                    raise EvaluationCancelled()
+                try:
+                    again = system.run(q["question"], pipeline)
+                except Exception:
+                    continue
+                n += 1
+                same_status += again.status == first[q["id"]]["status"]
+                same_answer += normalize_answer(again.answer) == normalize_answer(first[q["id"]]["answer"])
+            consistency[method] = {"n": n, "same_status": round(same_status / n, 4) if n else None,
+                                   "same_answer": round(same_answer / n, 4) if n else None}
     finally:
         kb.close()
     return {
@@ -123,8 +205,25 @@ def run_evaluation(
         "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "runtime_s": round(time.perf_counter() - t0, 2),
         "summary": {m: aggregate([r for r in rows if r["method"] == m]) for m in methods},
+        "method_labels": {m: VARIANT_LABELS[m] for m in methods},
+        "variant_settings": {m: VARIANTS[m][1] for m in methods},
+        "consistency": consistency,
+        "software": {"adaptive_rag": __version__, "git_commit": _git_commit()},
         "rows": rows,
     }
+
+
+def _git_commit() -> str | None:
+    try:
+        import subprocess
+
+        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5,
+                             cwd=Path(__file__).resolve().parents[3])
+        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, timeout=5,
+                               cwd=Path(__file__).resolve().parents[3]).stdout.strip()
+        return (out.stdout.strip() + ("-dirty" if dirty else "")) or None
+    except Exception:
+        return None
 
 
 def save_results(results: dict, results_dir: Path) -> Path:

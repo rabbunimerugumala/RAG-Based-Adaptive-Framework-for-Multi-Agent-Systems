@@ -59,6 +59,10 @@ def aggregate(rows: list[dict]) -> dict:
     cited = [r for r in answered_ans if r.get("cited_gold") is not None]
     with_ev = [r for r in ans if r.get("evidence_has_answer") is not None]
     lat = [r["latency_ms"] for r in ok]
+    answered = [r for r in ok if not r["abstained"]]
+    prec = [r.get("evidence_precision") for r in ans]
+    grounded = [r.get("grounded") for r in answered if r.get("grounded") is not None]
+    warm = lat[1:] if len(lat) > 1 else lat
     return {
         "n_total": len(rows),
         "n_errors": len(rows) - len(ok),
@@ -78,4 +82,12 @@ def aggregate(rows: list[dict]) -> dict:
         "median_latency_ms": round(statistics.median(lat), 2) if lat else None,
         "mean_llm_calls": _mean([r["llm_calls"] for r in ok]),
         "mean_retrieval_attempts": _mean([r["retrieval_attempts"] for r in ok]),
+        "abstention_rate": _rate(sum(r["abstained"] for r in ok), len(ok)),
+        "unsupported_answer_rate": _rate(sum(1 for r in answered if not r["correct"]), len(answered)),
+        "evidence_precision": _mean(prec),
+        "grounded_rate": _rate(sum(grounded), len(grounded)),
+        "verified_rate": _rate(sum(r.get("support_level") == "verified" for r in answered), len(answered)),
+        "cold_latency_ms": round(lat[0], 2) if lat else None,
+        "warm_mean_latency_ms": _mean(warm),
+        "mean_passages_used": _mean([r.get("passages_used") for r in ok]),
     }

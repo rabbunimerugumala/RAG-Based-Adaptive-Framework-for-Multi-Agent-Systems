@@ -43,6 +43,7 @@ def main() -> None:
     ap.add_argument("--web-docs", type=int, default=3)
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "datasets" / "triviaqa_unfiltered_sample")
     args = ap.parse_args()
+    args.out = args.out.resolve()
 
     try:
         from datasets import load_dataset

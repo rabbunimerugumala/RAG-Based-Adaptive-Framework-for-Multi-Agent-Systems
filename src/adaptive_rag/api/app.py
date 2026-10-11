@@ -20,7 +20,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from adaptive_rag import __version__
 from adaptive_rag.config import Settings, get_settings
 from adaptive_rag.evaluation.datasets import list_datasets
-from adaptive_rag.evaluation.runner import EvaluationCancelled, run_evaluation, save_results
+from adaptive_rag.evaluation.runner import (
+    VARIANT_LABELS,
+    VARIANTS,
+    EvaluationCancelled,
+    run_evaluation,
+    save_results,
+)
 from adaptive_rag.generation.llm import LLMError
 from adaptive_rag.models import ModelBundle, build_models
 from adaptive_rag.pipeline import RAGSystem
@@ -100,7 +106,7 @@ class EvaluationManager:
 
         try:
             result = run_evaluation(self.settings, self.models, req.dataset, req.methods, req.limit,
-                                    progress=progress, cancel=job["cancel"], run_id=job["job_id"])
+                                    progress=progress, cancel=job["cancel"], run_id=job["job_id"], repeat=req.repeat)
             save_results(result, self.settings.results_dir)
             job.update(status="completed", result={k: v for k, v in result.items() if k != "rows"})
         except EvaluationCancelled:
@@ -280,9 +286,14 @@ def create_app(settings: Settings | None = None, models: ModelBundle | None = No
         names = {d["name"] for d in list_datasets(settings.data_dir / "datasets") if d["valid"]}
         if req.dataset not in names:
             raise HTTPException(404, f"Dataset '{req.dataset}' not found or invalid")
-        if not req.methods:
-            raise HTTPException(422, "Select at least one method")
+        unknown = [m for m in req.methods if m not in VARIANTS]
+        if unknown:
+            raise HTTPException(422, f"Unknown method(s) {unknown}; choose from {list(VARIANTS)}")
         return st(request).evals.start(req)
+
+    @app.get("/api/variants", tags=["evaluation"], summary="Systems that can be evaluated (baseline and ablations)")
+    def variants():
+        return [{"name": k, "label": VARIANT_LABELS[k], "pipeline": v[0], "settings": v[1]} for k, v in VARIANTS.items()]
 
     @app.get("/api/evaluations", tags=["evaluation"])
     def list_evaluations(request: Request):

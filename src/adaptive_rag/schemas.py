@@ -210,4 +210,6 @@ class CompareResponse(BaseModel):
 class EvaluationRequest(BaseModel):
     dataset: str
     limit: int | None = Field(None, ge=1, le=2000)
-    methods: list[Method] = ["standard", "adaptive"]
+    methods: list[str] = Field(["standard", "adaptive"], min_length=1,
+                               description="standard | adaptive | adaptive_no_retry | adaptive_no_filter | adaptive_v1")
+    repeat: int = Field(0, ge=0, le=50, description="Re-run the first N questions to measure response consistency")
