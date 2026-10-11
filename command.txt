@@ -1,0 +1,19 @@
+Terminal 1: backend
+.\.venv\Scripts\Activate.ps1
+$env:ARAG_MODE = "real"
+uvicorn adaptive_rag.api.app:app --port 8000
+Wait until it prints Application startup complete.
+
+Terminal 2: frontend
+cd "C:\Users\rabbu\Projects\Software_projects\RAG-Based Adaptive Framework for Multi-Agent Systems\frontend"
+npm run dev
+
+Then open in your browser
+- App: http://localhost:3000
+- API docs: http://127.0.0.1:8000/docs
+
+To stop: press Ctrl + C in each terminal.
+
+Optional extras (in a third terminal, from the project folder, after .\.venv\Scripts\Activate.ps1):
+pytest                                                                                # run the tests
+python evaluation/run_benchmark.py --dataset smoke_test --mode real --methods standard,adaptive   # ~5 min smoke test
