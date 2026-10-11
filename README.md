@@ -5,6 +5,9 @@ Four cooperating agents — **Planner, Evidence, Verifier, Confidence** — plan
 verify every claim of the answer against it, and then **answer, retrieve again, or abstain**. A Standard RAG pipeline
 is kept as the baseline for fair comparison.
 
+**New here? Follow [RUN_PROJECT.md](RUN_PROJECT.md)** — a step-by-step Windows guide to install, run, test and
+benchmark the project.
+
 Everything runs **locally on a Windows laptop** (tested: 32 GB RAM, RTX 3050 Laptop GPU 4 GB). No paid APIs, no
 Docker, no cloud.
 
@@ -130,7 +133,7 @@ Open http://localhost:3000 → **Document Library** → upload files from `data/
 ### Tests and benchmarks
 
 ```powershell
-pytest                                                          # 134 fast tests with mocked models
+pytest                                                          # 156 fast tests with mocked models (4 real-model tests skipped)
 $env:ARAG_RUN_REAL_MODEL_TESTS = "1"; pytest -m real_model      # 4 tests with the real local models
 cd frontend; npm run lint; npm run build; cd ..
 
@@ -138,7 +141,8 @@ python evaluation/run_benchmark.py --dataset smoke_test --mode real             
 python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300 `
     --exclude-dataset data/datasets/triviaqa_unfiltered_sample                            # prepare held-out set
 python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
-    --methods standard,adaptive,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20   # full comparison (~3 h)
+    --methods standard,adaptive_v2,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20   # reproduces Part C (~3 h)
+# note: 'adaptive' now means the current defaults (routing on); 'adaptive_v2' is the v2 evaluated in Parts C and D
 python evaluation/analyze_results.py <run_id>                                             # metrics + McNemar tests
 ```
 

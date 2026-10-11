@@ -90,7 +90,7 @@ Same knowledge base, same retrieval function, same LLM and prompt, same default 
 order, temperature 0, fixed seed.
 
 **20. How did you test it?**
-98 fast tests with a scripted mock LLM and a fake NLI model covering every agent and decision branch, plus 4 opt-in
+156 fast tests with a scripted mock LLM and a fake NLI model covering every agent, routing and decision branch, plus 4 opt-in
 tests with the real models, frontend lint/build, and live end-to-end runs. See [testing.md](testing.md).
 
 ## D. Results and limitations

@@ -37,6 +37,8 @@ The theme follows your operating system until you toggle it; your choice is reme
      escalated to judged filtering, each passage's judge score and the adaptive bar τ_q. **Show filtered-out
      passages** lists removed passages with the reason (near-duplicate, below τ_q, over budget). Scores measure
      relevance, not truth; factual support is in the Verifier card.
+   - The answer header shows the number of LLM calls, retrieval rounds and the **route** the Planner chose
+     (`simple`, `complex` or `ambiguous`); the Agent Trace shows the Planner decision `route: …` and every escalation.
    - Open a saved result directly with `/ask?run=<run_id>`.
    - If evidence was insufficient you see an **abstention** message instead of an answer.
    - If the library is empty you see instructions to upload documents; no answer is generated.

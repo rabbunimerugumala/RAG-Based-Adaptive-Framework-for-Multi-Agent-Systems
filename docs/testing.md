@@ -4,8 +4,8 @@
 
 | Check | Command | Latest result |
 |---|---|---|
-| Unit + API tests (mocked / dev models) | `pytest` | **134 passed**, 4 skipped (the opt-in real-model tests) |
-| Real-model integration tests | `$env:ARAG_RUN_REAL_MODEL_TESTS="1"; pytest -m real_model` | **4 passed** (28 s) on the final code |
+| Unit + API tests (mocked / dev models) | `pytest` | **156 passed**, 4 skipped (the opt-in real-model tests) — re-run 2026-10-11 on `main` |
+| Real-model integration tests | `$env:ARAG_RUN_REAL_MODEL_TESTS="1"; pytest -m real_model` | **4 passed** (80 s) on `main` (2026-10-11) |
 | Python lint | `ruff check src tests evaluation` | no issues |
 | Frontend type check / lint / build | `cd frontend; npx tsc --noEmit; npm run lint; npm run build` | no issues; 7 routes prerendered |
 | UI check | headless Microsoft Edge screenshots of Ask, Agent Trace, Evaluation, Overview (light and dark) against a running backend in dev mode | pages render real backend data; see notes below |
@@ -23,6 +23,7 @@ pages were checked with HTTP calls plus rendered screenshots; please also try th
 | `test_pipeline.py` | the **original v1** pipeline pinned by `LEGACY_V1`: empty KB, citations, accept, retry→accept, abstain after max retries, retry budget, generator failure | mock LLM, fake NLI |
 | `test_multiagent_v2.py` | judge log-odds and floor; adaptive bar (mean, σ); filtering, ties, all-filtered fallback, evidence budget, metadata preservation; dedup; judge cache; triplet mode; judge failure fallback; escalation on retry; v1 short-answer failure reproduced; grounded verifier accepts correct short answers, rejects absent ones, needs judge confirmation; real contradictions still detected; uncited off-topic contradictions ignored; contradiction corroboration; v2 attempt selection; judge-based relevance; partial answers with unresolved claims; abstention; retrieval failure; Ollama timeout, malformed JSON, missing log-probabilities | mock LLM, fake NLI, mocked HTTP |
 | `test_evaluation.py` | metric definitions, dataset validation, path traversal, deterministic sampling, runner, CSV/JSON, benchmark/user KB separation | dev models |
+| `test_routing.py` | question routing (simple / complex / ambiguous), per-question escalation budget, lightweight round, escalation on insufficient or contradicted answers, hardware profiles, explicit settings beating profiles, routing on by default and disable-able, pinned benchmark variants | mock LLM, fake NLI |
 | `test_api.py` | all endpoints incl. `/api/ready`, `/api/variants`, multi-agent response fields, upload validation, evaluation lifecycle/export, unknown variants, error codes | dev models |
 | `test_real_models.py` | fastembed similarity, NLI entail/contradict, Ollama grounded JSON answer and "insufficient", full real pipeline | **real models** (opt-in) |
 

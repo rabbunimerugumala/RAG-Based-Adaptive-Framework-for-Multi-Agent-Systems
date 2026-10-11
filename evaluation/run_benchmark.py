@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from adaptive_rag.config import Settings  # noqa: E402
-from adaptive_rag.evaluation.runner import run_evaluation, save_results  # noqa: E402
+from adaptive_rag.evaluation.runner import VARIANTS, run_evaluation, save_results  # noqa: E402
 from adaptive_rag.models import build_models  # noqa: E402
 
 COLUMNS = [("accuracy", "Accuracy (alias match)"), ("exact_match", "Exact match"), ("f1", "Token F1"),
@@ -39,7 +39,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--methods", default="standard,adaptive",
-                    help="comma list of: standard, adaptive, adaptive_no_retry, adaptive_no_filter, adaptive_v1")
+                    help="comma list of: " + ", ".join(VARIANTS))
     ap.add_argument("--repeat", type=int, default=0, help="re-run the first N questions to measure consistency")
     ap.add_argument("--limit", type=int, default=None, help="fixed-seed random sample of N questions")
     ap.add_argument("--seed", type=int, default=0)

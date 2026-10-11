@@ -28,6 +28,7 @@ No LangChain, LlamaIndex or LangGraph: the agent loop is short explicit Python, 
 | Role | Model | Licence | Size on disk | Runs on | Notes |
 |---|---|---|---|---|---|
 | Generator **and evidence judge** (one shared instance) | `qwen3:4b-instruct-2507-q4_K_M` via **Ollama** | Apache-2.0 | 2.5 GB download | GPU + CPU | 4-bit quantised. With a 4096-token context Ollama reported 3.5 GB in memory, split ~67 % GPU / 33 % CPU on a 4 GB card. The judge reads Ollama's token log-probabilities (`logprobs`), available in the tested Ollama 0.31 |
+| Small LLM for the `8gb` profile (optional) | `qwen2.5:1.5b` via Ollama | Apache-2.0 | ~1 GB download | GPU or CPU | functional check only: model 1.1 GB in memory, backend ~0.3 GB; answer quality not benchmarked |
 | Embeddings | `BAAI/bge-small-en-v1.5` (fastembed ONNX) | MIT | ~65 MB | CPU | 384-dimensional vectors |
 | Verifier NLI | `cross-encoder/nli-deberta-v3-xsmall` | Apache-2.0 | ~280 MB | CPU | Outputs entailment / contradiction / neutral |
 | Reranker (optional, off by default) | `Xenova/ms-marco-MiniLM-L-6-v2` (fastembed) | Apache-2.0 | ~80 MB (approx.) | CPU | Enable with `ARAG_RERANKER=cross-encoder` |

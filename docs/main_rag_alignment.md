@@ -54,6 +54,13 @@ Live?"*). It also cost about 14 LLM calls per question. The escalation design ke
 to the Standard RAG baseline and spends judge calls only on questions the Confidence Agent could not accept. This
 decision was made on the development set only; the held-out test set was not used for it.
 
+## 4b. Interaction with question routing (default since the Part D experiment)
+
+Question routing does not change how the judge, the score, the adaptive bar or the ordering work. It changes how
+often they run: simple questions get at most one escalation round (so at most one judged-filtering round), complex and
+ambiguous questions up to two. In held-out run `20261011-171730-9902e7` this reduced LLM calls from 9.47 to 7.48 per
+question without a measurable accuracy change. With `ARAG_QUESTION_ROUTING=false` the evaluated v2 behaviour is used.
+
 ## 5. What is *not* claimed
 
 - No reproduction of MAIN-RAG's results; no comparison with its numbers (different model, retriever, corpus, sample).

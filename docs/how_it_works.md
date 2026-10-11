@@ -41,6 +41,18 @@ flowchart LR
 The system is **adaptive**: an easy question stops after one round (about the cost of Standard RAG plus checking);
 only hard questions trigger the extra agent work.
 
+### Question routing (on by default)
+
+Before searching, the Planner sorts the question with simple rules (no LLM call):
+
+* **simple** (one factual question): one quick round; if the answer is missing, contradicted or weakly supported, it
+  escalates **once** to the full four-agent workflow with filtered evidence;
+* **complex** (comparison, multi-part, longer than 20 words) or **ambiguous** (too few words, or starts with a pronoun
+  and names nothing): the full workflow with up to **two** extra rounds.
+
+The chosen route is shown in the answer header and in the Agent Trace. In the held-out test, routing used 21 % fewer
+LLM calls than without routing, with the same accuracy. `ARAG_QUESTION_ROUTING=false` turns it off.
+
 ## 4. Before any question: indexing documents
 
 1. Validate the file (PDF with text, DOCX, TXT, Markdown; max 20 MB; safe filename).

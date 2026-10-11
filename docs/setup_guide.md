@@ -52,6 +52,7 @@ The most important setting is `ARAG_MODE`:
 - `ARAG_MODE=real` — local models.
 
 Any `ARAG_*` variable can also be set for one terminal session, e.g. `$env:ARAG_MODE = "real"`.
+A variable set in the terminal takes precedence over the same variable in `.env`.
 All variables are documented in `.env.example` and `src/adaptive_rag/config.py`.
 
 ## 5. Models (real mode)
@@ -86,7 +87,11 @@ $env:ARAG_HARDWARE_PROFILE = "8gb"; ollama pull qwen2.5:1.5b
 uvicorn adaptive_rag.api.app:app --port 8000
 ```
 
-On an 8 GB laptop close other heavy applications; the smaller model answers less accurately than the 4B model.
+A profile only fills settings you did not set yourself. Settings written (uncommented) in `.env` count as set and
+override the profile, so keep `ARAG_OLLAMA_MODEL` and `ARAG_OLLAMA_NUM_CTX` commented out in `.env` when you use a
+profile (they are commented out in `.env.example`).
+
+On an 8 GB laptop close other heavy applications. The smaller model's answer quality has not been benchmarked.
 
 ## 6. Frontend
 
@@ -147,11 +152,15 @@ python evaluation/prepare_triviaqa.py --n 100                                   
 python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300 `
     --exclude-dataset data/datasets/triviaqa_unfiltered_sample                                  # held-out test
 
-# the full held-out comparison: baseline, proposed system and ablations (~3 h on the reference laptop)
+# reproduce Part C: baseline, v2 and ablations (~3 h on the reference laptop)
 python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
-    --methods standard,adaptive,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20
+    --methods standard,adaptive_v2,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20
 
-# a quicker comparison of only the baseline and the proposed system on 50 questions
+# reproduce Part D: baseline vs v2 vs v2 + question routing (~2 h)
+python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
+    --methods standard,adaptive_v2,adaptive_routed --repeat 20
+
+# a quicker comparison of the baseline and the current default system on a 50-question sample
 python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real --methods standard,adaptive --limit 50
 
 # recompute metrics and paired McNemar tests from saved per-question rows

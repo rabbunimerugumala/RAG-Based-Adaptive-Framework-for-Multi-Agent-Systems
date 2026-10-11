@@ -173,7 +173,8 @@ Run `20261011-122005-0a2d3c` · 2026-10-11 · 199 questions (165 answerable, 34 
 Code: frozen commit `808ef33` (the results file records `a703ed7` because the commit was read when the file was saved;
 the commits in between changed only documentation, UI and a trace-note string, not decision logic — the runner now
 records the commit at start). Same model, embedder, NLI model, corpus, prompt and top-k for every system.
-Reproduce: see [evaluation_protocol.md](evaluation_protocol.md) §4.
+Reproduce: see [evaluation_protocol.md](evaluation_protocol.md) §4. In this run the method name `adaptive` meant
+v2 with routing off; since routing became the default, that system is the variant `adaptive_v2`.
 
 | Metric | Standard RAG | **Multi-Agent v2 (full)** | v2 without retries | v2 without filtering | v1 (original) |
 |---|---|---|---|---|---|
@@ -238,7 +239,9 @@ Abstention on the 34 unanswerable questions: Standard and v2 differ on only 2 qu
 # Part D — Question routing, and a same-session re-run (held-out questions 101–300)
 
 Run `20261011-171730-9902e7` · 2026-10-11 · same 199 held-out questions, corpus, model and settings · 3 systems
-interleaved per question in one session · 0 failed cases · runtime 2 h 1 min · code `57aef61` (recorded at start).
+interleaved per question in one session · 0 failed cases · runtime 2 h 1 min · code `57aef61` (recorded at start;
+tag `v3-routing-heldout-eval`). Method names in that run: `adaptive` = v2 (routing off), `adaptive_routed` = v2 +
+routing.
 Routing was designed on the development set only (Part B data); the held-out results of Part C are unchanged.
 
 | Metric | Standard RAG | Multi-Agent v2 | **v2 + question routing** |

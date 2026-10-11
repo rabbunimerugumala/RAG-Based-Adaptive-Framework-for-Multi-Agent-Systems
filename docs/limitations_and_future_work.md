@@ -27,6 +27,12 @@ real-model tests.
 9. **Evaluation scope.** One dataset family (TriviaQA-unfiltered) with truncated evidence, 199 held-out questions,
    alias-match accuracy, one model. Differences of a few points can be noise; see the McNemar tests.
 10. Browser cancel does not stop a query already running on the server.
+11. **Question routing is rule-based** and was tuned on TriviaQA-style questions (194 of 199 held-out questions were
+    routed as simple); its behaviour on long, multi-part document questions has only been checked with unit tests.
+12. **Hardware profiles:** only `32gb` was benchmarked. `8gb` was checked for function on 8 smoke-test questions;
+    `16gb` was not run separately. Accuracy on smaller models is unknown.
+13. **Run-to-run variation:** Ollama generation is not fully deterministic even at temperature 0 with a fixed seed,
+    so repeated benchmark runs differ by a few questions.
 
 ## Future work
 

@@ -59,7 +59,9 @@ retrieve more candidates on retries; this is part of the method being evaluated.
 
 ```powershell
 python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
-    --methods standard,adaptive,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20
+    --methods standard,adaptive_v2,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20          # Part C
+python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
+    --methods standard,adaptive_v2,adaptive_routed --repeat 20                                       # Part D
 python evaluation/analyze_results.py <run_id>
 ```
 

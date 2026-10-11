@@ -4,6 +4,8 @@ Result files are git-ignored (they are large and contain TriviaQA questions and 
 every run used in the documentation so any copy can be verified with `Get-FileHash -Algorithm SHA256`.
 A local archive was created at `data/runtime/archive/benchmark_results_2026-10-11.zip`.
 
+Method names: until routing became the default, `adaptive` meant v2 with routing off (now the variant `adaptive_v2`).
+
 Note: runs before 2026-10-11 16:00 recorded the git commit when the file was *saved*; the commit that actually
 executed is given in `docs/results.md` (Part C: `808ef33`). Later runs record the commit at start.
 
@@ -17,3 +19,7 @@ executed is given in `docs/results.md` (Part C: `808ef33`). Later runs record th
 | `20261011-163907-4a3df8` | audit | smoke test before merge (v2) | smoke_test (24 q) | standard, adaptive | 9aa9d89 | `3bcbe3ec33a3815e81555559d74f5e2941ae39f2c330f8d36cb3415259b40d25` | `67a003a905ff0093772a6a504464ff62654c1d2b33382ffd29928d80f12f3c22` |
 | `20261011-165516-f102b5` | Part D dev | question routing on dev set | triviaqa_unfiltered_sample (100 q) | adaptive_routed | 57aef61 | `5b61c24ea6d940db797df56b976deda326d9ecbdc70f4838c0d65435748781ea` | `d51ab4650ffe5da369024b710bd07d86efb6be8517242857ed152fc96c83b54b` |
 | `20261011-171730-9902e7` | Part D | held-out re-run: Standard vs v2 vs v2+routing | triviaqa_heldout_101_300 (199 q) | standard, adaptive, adaptive_routed | 57aef61 | `8ec2985f7d0261ac75f0870c381e7eac3c9c61d1ae3be04d2b0bab9093f34931` | `b8ed7d6aec1a0709018e29633fb37a3106947c93c7df1ae679316092748e8cfd` |
+| `20261011-193700-e448b5` | audit | pre-merge smoke test with routing on by default | smoke_test (24 q) | standard, adaptive | 02c78b4-dirty | `c8b3ceeb044950aabf872c2362dbacefbbc1d3eb51227113f1b5ffb75b1e78fc` | `a52ddd3cae024712d498974f9e6a1849d914372c0c8adeabe6e5faa679d4fc68` |
+
+`20261011-193700-e448b5` recorded `02c78b4-dirty`: it ran the uncommitted change that made routing the default, which was
+committed unchanged as `ef88805` immediately afterwards.
