@@ -24,6 +24,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+# Hardware profiles: defaults for laptops with 8 / 16 / 32 GB RAM. A profile only fills settings that were not set
+# explicitly (env or .env), so any value can still be overridden. Only "32gb" was used for the reported benchmarks.
+HARDWARE_PROFILES: dict[str, dict] = {
+    "8gb": {"ollama_model": "qwen2.5:1.5b", "ollama_num_ctx": 2048, "llm_max_tokens": 256, "nli_backend": "none",
+            "doc_pool_k": 6, "question_routing": True},
+    "16gb": {"ollama_num_ctx": 3072, "doc_pool_k": 8, "question_routing": True},
+    "32gb": {},
+}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ARAG_", env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
@@ -70,6 +80,12 @@ class Settings(BaseSettings):
     abstain_threshold: float = Field(0.40, ge=0, le=1)
     max_retries: int = Field(2, ge=0, le=2, description="Adaptive retries; hard-capped at 2")
 
+    # --- question routing (Planner): simple questions take a lightweight route ---------------------
+    question_routing: bool = Field(
+        False, description="Planner routes simple questions to a lightweight round with a smaller escalation budget")
+    simple_route_retries: int = Field(1, ge=0, le=2, description="Escalation rounds allowed for simple questions")
+    hardware_profile: Literal["8gb", "16gb", "32gb"] = "32gb"
+
     # --- verifier ------------------------------------------------------------------------------
     nli_entail_threshold: float = Field(0.5, ge=0, le=1)
     nli_contradict_threshold: float = Field(0.6, ge=0, le=1)
@@ -103,6 +119,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check(self) -> Settings:
+        for key, value in HARDWARE_PROFILES[self.hardware_profile].items():
+            if key not in self.model_fields_set:
+                object.__setattr__(self, key, value)
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError("chunk_overlap must be smaller than chunk_size")
         if self.abstain_threshold > self.accept_threshold:

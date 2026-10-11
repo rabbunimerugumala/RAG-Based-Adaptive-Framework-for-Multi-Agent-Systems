@@ -38,6 +38,7 @@ VARIANTS: dict[str, tuple[str, dict]] = {
     "adaptive_no_retry": ("adaptive", {"max_retries": 0}),
     "adaptive_no_filter": ("adaptive", {"doc_filter": "off"}),
     "adaptive_v1": ("adaptive", dict(LEGACY_V1)),
+    "adaptive_routed": ("adaptive", {"question_routing": True}),
 }
 VARIANT_LABELS = {
     "standard": "Standard RAG (baseline)",
@@ -45,6 +46,7 @@ VARIANT_LABELS = {
     "adaptive_no_retry": "Multi-Agent v2 without adaptive retries",
     "adaptive_no_filter": "Multi-Agent v2 without evidence filtering",
     "adaptive_v1": "Multi-Agent v1 (original pipeline)",
+    "adaptive_routed": "Multi-Agent v2 + question routing",
 }
 
 
@@ -108,6 +110,7 @@ def score_row(q: dict, method: str, resp) -> dict:
                                if q["answerable"] and golds and resp.evidence else None),
         "grounded": grounded_answer(resp.answer, cited_text) if not abstained else None,
         "support_level": resp.support_level,
+        "route": resp.route,
         "passages_used": len(resp.evidence),
         "passages_filtered": len(resp.filtered_evidence),
         "attempts": attempt_log(resp),

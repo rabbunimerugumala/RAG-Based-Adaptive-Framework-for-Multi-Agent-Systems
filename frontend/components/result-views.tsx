@@ -76,7 +76,7 @@ export function AnswerCard({ r, idPrefix = "r" }: { r: QueryResponse; idPrefix?:
     <Card>
       <CardHeader
         title="Answer"
-        description={`${r.method === "adaptive" ? "Multi-Agent RAG" : "Standard RAG (baseline)"} · ${fmt.ms(r.stats.latency_ms)} · ${r.stats.llm_calls} LLM call(s) · ${r.stats.retrieval_attempts} retrieval round(s)`}
+        description={`${r.method === "adaptive" ? "Multi-Agent RAG" : "Standard RAG (baseline)"} · ${fmt.ms(r.stats.latency_ms)} · ${r.stats.llm_calls} LLM call(s) · ${r.stats.retrieval_attempts} retrieval round(s)${r.route && r.route !== "full" ? ` · route: ${r.route}` : ""}`}
         action={<SupportBadge r={r} />}
       />
       <div className="space-y-4 px-5 py-4">

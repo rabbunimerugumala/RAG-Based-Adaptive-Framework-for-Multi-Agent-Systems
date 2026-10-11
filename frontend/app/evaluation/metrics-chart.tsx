@@ -20,6 +20,7 @@ const SERIES: Record<string, { label: string; color: string }> = {
   adaptive_no_retry: { label: "Multi-Agent, no retries", color: "var(--series-3)" },
   adaptive_no_filter: { label: "Multi-Agent, no filtering", color: "var(--series-4)" },
   adaptive_v1: { label: "Multi-Agent v1 (original)", color: "var(--series-5)" },
+  adaptive_routed: { label: "Multi-Agent + question routing", color: "var(--series-6)" },
 };
 
 export function MetricsChart({ summary, methods }: { summary: Record<string, MetricSummary>; methods: string[] }) {

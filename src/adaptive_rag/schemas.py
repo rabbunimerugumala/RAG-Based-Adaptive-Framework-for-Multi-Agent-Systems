@@ -77,6 +77,10 @@ class RetrievalPlan(BaseModel):
     top_k: int
     candidate_k: int
     pool_k: int = Field(0, description="Passages judged by the Evidence Agent per round (0 = no judging)")
+    route: Literal["simple", "complex", "ambiguous", "full"] = Field(
+        "full", description="Planner's route; 'full' when question routing is disabled")
+    route_reason: str = ""
+    retry_budget: int = Field(2, description="Escalation rounds allowed for this question")
     strategy: str
     explanation: str
 
@@ -179,6 +183,7 @@ class QueryResponse(BaseModel):
     verification: VerificationResult | None
     verification_used_in_decision: bool
     confidence: ConfidenceAssessment | None
+    route: str | None = Field(None, description="Planner route of the Multi-Agent run (simple/complex/ambiguous/full)")
     support_level: Literal["verified", "partial", "unverified", "none"] = Field(
         "none", description="verified: all claims supported; partial: some claims unresolved; none: no answer")
     unresolved_claims: list[str] = []

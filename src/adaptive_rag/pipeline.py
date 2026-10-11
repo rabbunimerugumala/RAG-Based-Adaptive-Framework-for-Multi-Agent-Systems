@@ -169,7 +169,8 @@ class RAGSystem:
             plan = self.planner.plan(question)
         trace.append(TraceStep(step="planner", title="Planner Agent", status="completed", duration_ms=t.ms,
                                input={"query": question}, output=plan.model_dump(),
-                               decision="retrieve" if plan.needs_retrieval else "no retrieval needed",
+                               decision=("no retrieval needed" if not plan.needs_retrieval else
+                                         f"route: {plan.route}" if self.settings.question_routing else "retrieve"),
                                note=plan.explanation))
         if not plan.needs_retrieval:
             return self._response("adaptive", question, SMALL_TALK_MESSAGE, "no_retrieval_needed", [], [], None,
@@ -178,13 +179,15 @@ class RAGSystem:
             early.trace = trace + early.trace
             return early
 
+        plan_route = plan.route
         llm_calls = nli_calls = 0
         judge_cache: dict = {}  # passage judgments are reused across retries of the same run
         packages: dict[int, EvidencePackage] = {}
         attempts: list[AttemptRecord] = []
         final: AttemptRecord | None = None
         final_conf = None
-        for attempt in range(self.settings.max_retries + 1):
+        budget = plan.retry_budget if self.settings.question_routing else self.settings.max_retries
+        for attempt in range(budget + 1):
             if attempt > 0:
                 prev = attempts[-1]
                 with _Timer() as t:
@@ -227,7 +230,7 @@ class RAGSystem:
                                    duration_ms=t.ms, input={"method": verification.method},
                                    output=verification.model_dump(), decision=verification.status,
                                    note=verification.summary))
-            retries_left = self.settings.max_retries - attempt
+            retries_left = budget - attempt
             with _Timer() as t:
                 conf = self.confidence.assess(plan, evidence, ans, verification, retries_left)
             trace.append(TraceStep(step="confidence", title="Confidence Agent", attempt=attempt, status="completed",
@@ -262,7 +265,7 @@ class RAGSystem:
         package = packages.get(final.attempt)
         return self._response("adaptive", question, answer, status, final.evidence, citations, final.verification,
                               True, final_conf, trace, t0, llm_calls, nli_calls, len(attempts),
-                              support_level=support_level, unresolved_claims=unresolved,
+                              support_level=support_level, unresolved_claims=unresolved, route=plan_route,
                               filtered_evidence=package.filtered if package else [],
                               evidence_filter=package.report if package else None)
 

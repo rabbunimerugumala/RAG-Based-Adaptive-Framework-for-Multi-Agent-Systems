@@ -137,6 +137,7 @@ export interface QueryResponse {
   verification: VerificationResult | null;
   verification_used_in_decision: boolean;
   confidence: ConfidenceAssessment | null;
+  route?: string | null;
   support_level: "verified" | "partial" | "unverified" | "none";
   unresolved_claims: string[];
   filtered_evidence: Evidence[];

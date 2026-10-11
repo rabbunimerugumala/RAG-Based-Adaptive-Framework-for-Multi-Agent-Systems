@@ -37,6 +37,23 @@ def classify(query: str) -> str:
     return "factoid"
 
 
+_PRONOUN_START = re.compile(r"^\s*(it|this|that|they|he|she|these|those|its|their)\b", re.I)
+
+
+def route_question(query: str, qtype: str, subs: list[str], kws: list[str]) -> tuple[str, str]:
+    """Rule-based question analysis (no LLM call): simple, complex or ambiguous, with a readable reason."""
+    if len(kws) < 2:
+        return "ambiguous", "too few content words to search reliably"
+    if _PRONOUN_START.match(query) and not re.search(r"\b[A-Z][a-z]+", query[1:]):
+        return "ambiguous", "starts with a pronoun and names no entity"
+    if qtype in ("comparison", "multi_part") or subs:
+        return "complex", f"{qtype.replace('_', '-')} question"
+    n_words = len(query.split())
+    if n_words > 20:
+        return "complex", f"long question ({n_words} words)"
+    return "simple", "single factual question"
+
+
 def subquestions(query: str, qtype: str) -> list[str]:
     q = query.strip()
     if qtype == "comparison":
@@ -75,6 +92,10 @@ class PlannerAgent:
         if len(kws) >= 2 and kw_query.lower() != query.lower():
             queries.append(kw_query)
         pool_k = max(s.doc_pool_k, top_k) if s.doc_filter == "judge" and s.doc_filter_stage == "always" else 0
+        route, route_reason, budget = "full", "question routing disabled", s.max_retries
+        if s.question_routing:
+            route, route_reason = route_question(query, qtype, subs, kws)
+            budget = min(s.simple_route_retries, s.max_retries) if route == "simple" else s.max_retries
         expl = f"Query classified as '{qtype}'. Hybrid search with {len(queries)} query variant(s), evidence budget top_k={top_k}."
         if pool_k:
             expl += f" Evidence Agent will judge {pool_k} candidate passages and keep those above the adaptive bar."
@@ -86,7 +107,9 @@ class PlannerAgent:
             query=query, needs_retrieval=True, query_type=qtype, keywords=kws, focus_terms=focus_terms(query),
             subquestions=subs,
             search_queries=queries, top_k=top_k, candidate_k=s.candidate_k, pool_k=pool_k, strategy="initial",
-            explanation=expl,
+            explanation=expl + (f" Route: {route} ({route_reason}); up to {budget} escalation round(s) with the full "
+                                f"four-agent workflow." if s.question_routing else ""),
+            route=route, route_reason=route_reason, retry_budget=budget,
         )
 
     def _retry_pool(self, previous: RetrievalPlan, strategy: str) -> int:
