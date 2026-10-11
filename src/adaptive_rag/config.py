@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     lexical_support_threshold: float = Field(0.75, ge=0, le=1)
     lexical_partial_threshold: float = Field(0.45, ge=0, le=1)
 
+    # --- multi-agent v2 (each switch can be turned off to reproduce the original v1 pipeline) -----
+    # Evidence Agent: MAIN-RAG-inspired document judging and filtering (Chang et al., ACL 2025, Sec. 3.2-3.3)
+    doc_filter: Literal["off", "judge"] = "judge"
+    doc_judge_mode: Literal["pair", "triplet"] = Field(
+        "pair", description="pair: Judge(doc, question) - adaptation; triplet: paper's Doc-Q-A with per-doc Predictor")
+    doc_pool_k: int = Field(10, ge=2, le=30, description="Candidate passages judged per retrieval round")
+    doc_filter_n_sigma: float = Field(0.0, ge=0, le=3, description="tau_q = mean - n*std (paper default n=0)")
+    doc_min_keep: int = Field(1, ge=1, le=10, description="Fallback: never keep fewer passages than this")
+    dedup_jaccard: float = Field(0.8, ge=0.5, le=1.0, description="Drop passages this similar to a better one")
+    # Verifier: v1 = original rules; grounded = contradiction only from related, well-formed premises,
+    # plus a judge-backed support check for short answers
+    verifier_mode: Literal["v1", "grounded"] = "grounded"
+    # Confidence: v1 = original decision rules; v2 = judge-based evidence relevance, partial answers,
+    # attempt selection that prefers verified answers
+    confidence_mode: Literal["v1", "v2"] = "v2"
+
     # --- api -----------------------------------------------------------------------------------
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
@@ -120,6 +136,10 @@ class Settings(BaseSettings):
             "nli_backend": self.resolved_nli_backend,
         }
         return d
+
+
+# Switches that reproduce the original (v1) Adaptive RAG pipeline exactly - used for baseline comparisons.
+LEGACY_V1 = {"doc_filter": "off", "verifier_mode": "v1", "confidence_mode": "v1"}
 
 
 @lru_cache

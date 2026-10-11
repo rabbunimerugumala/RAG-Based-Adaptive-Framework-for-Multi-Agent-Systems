@@ -16,6 +16,7 @@ documents act as distractors.
 Usage (PowerShell, from the project root):
     pip install -e ".[datasets]"
     python evaluation/prepare_triviaqa.py --n 100
+    python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300
 """
 
 from __future__ import annotations
@@ -34,6 +35,8 @@ from adaptive_rag.evaluation.metrics import contains_answer  # noqa: E402
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=100, help="number of questions (taken in dataset order)")
+    ap.add_argument("--offset", type=int, default=0,
+                    help="skip this many questions first (e.g. 100 for a held-out set disjoint from the first 100)")
     ap.add_argument("--split", default="validation", choices=["train", "validation"])
     ap.add_argument("--wiki-chars", type=int, default=6000)
     ap.add_argument("--web-chars", type=int, default=3000)
@@ -48,7 +51,11 @@ def main() -> None:
 
     stream = load_dataset("mandarjoshi/trivia_qa", "unfiltered", split=args.split, streaming=True)
     corpus, questions = [], []
+    seen = 0
     for row in stream:
+        seen += 1
+        if seen <= args.offset:
+            continue
         if len(questions) >= args.n:
             break
         qid = row["question_id"]
@@ -77,7 +84,8 @@ def main() -> None:
     n_ans = sum(q["answerable"] for q in questions)
     manifest = {
         "name": args.out.name,
-        "title": f"TriviaQA-unfiltered sample ({args.split}, first {len(questions)} questions)",
+        "title": (f"TriviaQA-unfiltered sample ({args.split}, first {len(questions)} questions)" if not args.offset else
+                  f"TriviaQA-unfiltered held-out sample ({args.split}, questions {args.offset + 1}-{args.offset + len(questions)})"),
         "description": (f"{len(questions)} TriviaQA-unfiltered {args.split} questions with truncated evidence "
                         f"(wiki {args.wiki_chars} chars, top-{args.web_docs} web results {args.web_chars} chars). "
                         f"{n_ans} have a gold alias in the retained evidence (answerable); the rest test abstention."),

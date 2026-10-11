@@ -58,6 +58,11 @@ class Evidence(BaseModel):
     rerank_score: float | None = None
     keyword_overlap: float = Field(0.0, description="Fraction of query keywords present in this passage")
     matched_queries: list[str] = []
+    retrieval_rank: int | None = Field(None, description="Rank after hybrid retrieval, before judging")
+    judge_score: float | None = Field(
+        None, description="Evidence Agent judge score: log P(Yes) - log P(No). Relevance, not proof of truth")
+    candidate_answer: str | None = Field(None, description="Per-passage Predictor answer (triplet mode only)")
+    filter_reason: str | None = None
 
 
 # --------------------------------------------------------------------------- agents
@@ -71,6 +76,7 @@ class RetrievalPlan(BaseModel):
     search_queries: list[str]
     top_k: int
     candidate_k: int
+    pool_k: int = Field(0, description="Passages judged by the Evidence Agent per round (0 = no judging)")
     strategy: str
     explanation: str
 
@@ -95,6 +101,7 @@ class VerificationResult(BaseModel):
     contradicted_claims: list[str] = []
     method: str
     summary: str
+    llm_calls: int = Field(0, description="Judge calls made by the verifier (grounded mode, short answers)")
 
 
 class ConfidenceAssessment(BaseModel):
@@ -128,6 +135,20 @@ class TraceStep(BaseModel):
     note: str | None = None
 
 
+class EvidenceFilterReport(BaseModel):
+    mode: str
+    pool_size: int
+    duplicates_removed: int
+    threshold: float | None
+    mean: float | None
+    std: float | None
+    n_sigma: float
+    retained: int
+    filtered: int
+    fallback: str | None = None
+    judge_calls: int
+
+
 class Citation(BaseModel):
     ref: int
     chunk_id: str
@@ -158,6 +179,11 @@ class QueryResponse(BaseModel):
     verification: VerificationResult | None
     verification_used_in_decision: bool
     confidence: ConfidenceAssessment | None
+    support_level: Literal["verified", "partial", "unverified", "none"] = Field(
+        "none", description="verified: all claims supported; partial: some claims unresolved; none: no answer")
+    unresolved_claims: list[str] = []
+    filtered_evidence: list[Evidence] = Field([], description="Retrieved passages the Evidence Agent removed")
+    evidence_filter: EvidenceFilterReport | None = None
     trace: list[TraceStep]
     stats: RunStats
     mode: str

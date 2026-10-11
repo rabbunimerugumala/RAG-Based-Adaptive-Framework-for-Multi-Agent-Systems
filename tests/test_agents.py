@@ -82,7 +82,8 @@ def test_replan_broaden_increases_candidates_without_llm(settings):
 # ================================================================ Evidence
 def test_evidence_agent_runs_all_planned_queries(settings, smoke_kb):
     plan = PlannerAgent(settings, ExtractiveGenerator()).plan("Who created the Quillon messaging protocol?")
-    evidence, summary = EvidenceAgent(settings, smoke_kb, None).retrieve(plan)
+    pkg = EvidenceAgent(settings.model_copy(update={"doc_filter": "off"}), smoke_kb, None).retrieve(plan)
+    evidence, summary = pkg.evidence, pkg.summary
     assert evidence[0].doc_id == "quillon_protocol"
     assert summary["ranked_lists_fused"] == 2 * len(plan.search_queries)
     assert len(evidence) == plan.top_k and [e.ref for e in evidence] == list(range(1, plan.top_k + 1))
@@ -114,7 +115,9 @@ def test_verifier_supported_partial_unsupported_lexical_only(settings):
     assert res.status == "unsupported" and res.support_score == 0.0
 
 
-def test_verifier_with_nli_detects_contradiction(settings):
+@pytest.mark.parametrize("mode", ["v1", "grounded"])
+def test_verifier_with_nli_detects_contradiction(settings, mode):
+    settings = settings.model_copy(update={"verifier_mode": mode})
     v = VerifierAgent(settings, FakeNLI())
     evidence = [ev(1, "Swimming in the reservoir is prohibited.")]
     res, calls = v.verify("q", ans("Swimming in the reservoir is not prohibited [1]."), evidence)

@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 
 from adaptive_rag.config import Settings
+from adaptive_rag.generation.llm import LLMError
 from adaptive_rag.generation.nli import NLIModel
 from adaptive_rag.schemas import ClaimCheck, Evidence, GeneratedAnswer, VerificationResult
 from adaptive_rag.text import citation_refs, content_terms, numbers, split_sentences, strip_citations
@@ -75,13 +76,24 @@ def declarative(question: str, answer: str) -> str:
     return f"{q}? {a}."
 
 
+
+def is_fallback_hypothesis(question: str, hypothesis: str) -> bool:
+    """True when declarative() could not build a statement and returned 'question? answer.'."""
+    return hypothesis.startswith(question.strip().rstrip("?. ").strip() + "?")
+
+
 class VerifierAgent:
-    def __init__(self, settings: Settings, nli: NLIModel | None):
+    def __init__(self, settings: Settings, nli: NLIModel | None, generator=None):
         self.settings, self.nli = settings, nli
+        # the shared LLM is used only in "grounded" mode, as the MAIN-RAG triplet judge for short answers
+        self.generator = generator if settings.verifier_mode == "grounded" else None
 
     @property
     def method(self) -> str:
-        return f"lexical+nli({self.nli.name})" if self.nli else "lexical-only (no NLI model; contradictions undetectable)"
+        base = f"lexical+nli({self.nli.name})" if self.nli else "lexical-only (no NLI model; contradictions undetectable)"
+        if self.settings.verifier_mode == "grounded":
+            base += " · grounded contradictions" + (" · judge-checked short answers" if self.generator else "")
+        return base
 
     def verify(self, question: str, answer: GeneratedAnswer, evidence: list[Evidence]) -> tuple[VerificationResult, int]:
         """Return the verification result and the number of NLI model invocations (batched calls)."""
@@ -106,6 +118,7 @@ class VerifierAgent:
             claims.extend((c, cited) for c in atomic_claims(strip_citations(raw)))
         checks: list[ClaimCheck] = []
         nli_calls = 0
+        llm_calls = 0
         for claim, cited in claims:
             lex = {e.ref: lexical_support(claim, e.text) for e in evidence}
             best_ref = max(lex, key=lambda r: (lex[r], r in cited))
@@ -113,8 +126,15 @@ class VerifierAgent:
             if len(cited) > 1:  # a claim may combine facts from several cited passages
                 best_lex = max(best_lex, lexical_support(claim, " ".join(by_ref[r].text for r in cited)))
             entail = contra = None
+            grounded = s.verifier_mode == "grounded"
+            # v1: "short" = fewer than 4 content terms; grounded: a bare answer of at most 4 words
+            short = len(claim.split()) <= 4 if grounded else len(content_terms(claim)) < 4
+            ill_formed = False
             if self.nli:
-                hypothesis = claim if len(content_terms(claim)) >= 4 else declarative(question, claim)
+                hypothesis = claim if not short else declarative(question, claim)
+                ill_formed = short and is_fallback_hypothesis(question, hypothesis)
+                if grounded and ill_formed:
+                    hypothesis = f'The answer to the question "{question.strip()}" is {claim.strip().rstrip(".")}.'
                 refs = list(dict.fromkeys(cited + sorted(lex, key=lex.get, reverse=True)[:3]))
                 premises = [(r, w) for r in refs for w in _windows(by_ref[r].text)]
                 if len(cited) > 1:
@@ -123,13 +143,42 @@ class VerifierAgent:
                 nli_calls += 1
                 i_best = max(range(len(preds)), key=lambda i: preds[i]["entailment"])
                 entail = preds[i_best]["entailment"]
-                # contradictions only count from premises that talk about the same thing as the claim
-                related = [p["contradiction"] for (_, w), p in zip(premises, preds)
-                           if lexical_support(claim, w) >= s.lexical_partial_threshold]
-                contra = max(related, default=0.0)
+                if not grounded:
+                    # v1: contradictions count from any premise that talks about the same thing as the claim
+                    related = [p["contradiction"] for (_, w), p in zip(premises, preds)
+                               if lexical_support(claim, w) >= s.lexical_partial_threshold]
+                    contra = max(related, default=0.0)
+                elif ill_formed:
+                    contra = 0.0  # no reliable statement to contradict; contradiction signal not used
+                else:
+                    # grounded: only cited / judge-relevant passages that discuss the claim, and only where the
+                    # contradiction outweighs entailment in the SAME window
+                    trusted = {r for r in refs if r in cited or (by_ref[r].judge_score or 0) > 0
+                               or by_ref[r].judge_score is None and r == refs[0]}
+                    related = [p["contradiction"] for (r, w), p in zip(premises, preds)
+                               if r in trusted and lexical_support(claim, w) >= s.lexical_partial_threshold
+                               and p["contradiction"] > p["entailment"]]
+                    contra = max(related, default=0.0)
                 if entail >= s.nli_entail_threshold:
                     best_ref = premises[i_best][0]
             label, reason = self._label(best_lex, entail, contra)
+            if (grounded and self.generator is not None and short and label != "supported"
+                    and label != "contradicted"):
+                # short answer: require BOTH the answer text in a passage AND the triplet judge's confirmation
+                span_refs = [r for r in dict.fromkeys(cited + sorted(lex, key=lex.get, reverse=True))
+                             if lex[r] >= 1.0][:2]
+                for r in span_refs:
+                    try:
+                        jscore, _ = self.generator.judge(question, by_ref[r].text, claim)
+                    except LLMError:
+                        break
+                    llm_calls += int(self.generator.is_llm)
+                    if jscore > 0:
+                        label, best_ref = "supported", r
+                        reason = (f"answer text found in passage [{r}] and the evidence judge confirms support "
+                                  f"(log-odds {jscore:.1f})")
+                        break
+                    reason += f"; judge did not confirm support in [{r}] (log-odds {jscore:.1f})"
             checks.append(ClaimCheck(
                 claim=claim, label=label, lexical_support=round(best_lex, 3),
                 nli_entailment=None if entail is None else round(entail, 3),
@@ -162,7 +211,7 @@ class VerifierAgent:
         return VerificationResult(
             status=status, support_score=round(support, 4), citation_consistency=round(consistency, 4),
             claims=checks, unsupported_claims=unsupported, contradicted_claims=contradicted,
-            method=self.method, summary=summary,
+            method=self.method, summary=summary, llm_calls=llm_calls,
         ), nli_calls
 
     def _label(self, lex: float, entail: float | None, contra: float | None) -> tuple[str, str]:

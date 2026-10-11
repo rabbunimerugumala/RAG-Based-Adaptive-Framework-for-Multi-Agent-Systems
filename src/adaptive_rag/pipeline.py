@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from adaptive_rag.agents.confidence import AttemptRecord, ConfidenceAgent
-from adaptive_rag.agents.evidence import EvidenceAgent
+from adaptive_rag.agents.evidence import EvidenceAgent, EvidencePackage
 from adaptive_rag.agents.planner import PlannerAgent
 from adaptive_rag.agents.verifier import VerifierAgent
 from adaptive_rag.config import Settings
@@ -66,8 +66,8 @@ class RAGSystem:
         self.settings, self.kb, self.generator = settings, kb, generator
         self.reranker = reranker
         self.planner = PlannerAgent(settings, generator)
-        self.evidence_agent = EvidenceAgent(settings, kb, reranker)
-        self.verifier = VerifierAgent(settings, nli)
+        self.evidence_agent = EvidenceAgent(settings, kb, reranker, generator)
+        self.verifier = VerifierAgent(settings, nli, generator)
         self.confidence = ConfidenceAgent(settings)
 
     @property
@@ -77,11 +77,13 @@ class RAGSystem:
             "embedder": self.kb.embedder.name,
             "nli": self.verifier.nli.name if self.verifier.nli else "none",
             "reranker": self.reranker.name if self.reranker else "none",
+            "evidence_judge": (f"{self.generator.name} log-odds ({self.settings.doc_judge_mode})"
+                               if self.settings.doc_filter == "judge" else "off"),
         }
 
     def _response(self, method, question, answer, status, evidence, citations, verification, used, confidence,
-                  trace, t0, llm_calls, nli_calls, attempts, analysis_ms=0.0) -> QueryResponse:
-        return QueryResponse(
+                  trace, t0, llm_calls, nli_calls, attempts, analysis_ms=0.0, **extra) -> QueryResponse:
+        return QueryResponse(**extra,
             run_id=uuid.uuid4().hex[:12], method=method, question=question, answer=answer, status=status,
             citations=citations, evidence=evidence, verification=verification,
             verification_used_in_decision=used, confidence=confidence, trace=trace,
@@ -177,6 +179,8 @@ class RAGSystem:
             return early
 
         llm_calls = nli_calls = 0
+        judge_cache: dict = {}  # passage judgments are reused across retries of the same run
+        packages: dict[int, EvidencePackage] = {}
         attempts: list[AttemptRecord] = []
         final: AttemptRecord | None = None
         final_conf = None
@@ -195,15 +199,28 @@ class RAGSystem:
                                                "candidate_k": plan.candidate_k, "llm_calls": used},
                                        decision=plan.strategy, note=plan.explanation))
             with _Timer() as t:
-                evidence, summary = self.evidence_agent.retrieve(plan)
-            trace.append(TraceStep(step="evidence", title="Evidence Agent", attempt=attempt, status="completed",
-                                   duration_ms=t.ms, input={"search_queries": plan.search_queries, "top_k": plan.top_k},
-                                   output=summary, note="Relevance scores rank passages; they do not prove claims."))
+                try:
+                    package = self.evidence_agent.retrieve(plan, judge_cache)
+                    step_status, step_note = "completed", "Scores rank and filter passages; they do not prove claims."
+                except Exception as exc:  # retrieval failure: recorded, then handled like "no evidence"
+                    package = EvidencePackage(evidence=[], summary={"error": f"{exc.__class__.__name__}: {exc}"})
+                    step_status, step_note = "failed", f"Retrieval failed: {exc.__class__.__name__}: {exc}"
+            packages[attempt] = package
+            evidence = package.evidence
+            llm_calls += package.llm_calls
+            rep = package.report
+            decision = (f"kept {rep.retained} of {rep.pool_size} (tau_q={rep.threshold})" if rep and rep.threshold
+                        is not None else ("retrieved" if step_status == "completed" else "failed"))
+            trace.append(TraceStep(step="evidence", title="Evidence Agent", attempt=attempt, status=step_status,
+                                   duration_ms=t.ms, input={"search_queries": plan.search_queries, "top_k": plan.top_k,
+                                                            "pool_k": plan.pool_k},
+                                   output=package.summary, decision=decision, note=step_note))
             ans, calls = self._generate(question, evidence, trace, attempt)
             llm_calls += calls
             with _Timer() as t:
                 verification, n = self.verifier.verify(question, ans, evidence)
             nli_calls += n
+            llm_calls += verification.llm_calls
             trace.append(TraceStep(step="verifier", title="Verifier Agent", attempt=attempt, status="completed",
                                    duration_ms=t.ms, input={"method": verification.method},
                                    output=verification.model_dump(), decision=verification.status,
@@ -230,14 +247,22 @@ class RAGSystem:
             break
 
         assert final is not None and final_conf is not None
+        unresolved: list[str] = []
         if final_conf.decision == "accept":
             answer, status = final.answer.answer, "answered"
             citations = _citations(final.answer, final.evidence)
             citations = [c for c in citations if c.valid]
+            v = final.verification
+            support_level = {"supported": "verified", "partially_supported": "partial"}.get(v.status, "unverified")
+            unresolved = [c.claim for c in v.claims if c.label != "supported"]
         else:
-            answer, status, citations = f"{ABSTAIN_PREFIX} {final_conf.reason}", "abstained", []
+            answer, status, citations, support_level = f"{ABSTAIN_PREFIX} {final_conf.reason}", "abstained", [], "none"
+        package = packages.get(final.attempt)
         return self._response("adaptive", question, answer, status, final.evidence, citations, final.verification,
-                              True, final_conf, trace, t0, llm_calls, nli_calls, len(attempts))
+                              True, final_conf, trace, t0, llm_calls, nli_calls, len(attempts),
+                              support_level=support_level, unresolved_claims=unresolved,
+                              filtered_evidence=package.filtered if package else [],
+                              evidence_filter=package.report if package else None)
 
     def run(self, question: str, method: str) -> QueryResponse:
         return self.run_adaptive(question) if method == "adaptive" else self.run_standard(question)

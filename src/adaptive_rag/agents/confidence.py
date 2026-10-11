@@ -3,8 +3,9 @@ whether to ACCEPT the answer, RETRY retrieval (at most ``max_retries`` times) or
 
     C = (w_r*relevance + w_c*coverage + w_v*verification + w_k*consistency) / (sum of weights of AVAILABLE components)
 
-  relevance    - mean over the top-3 passages of passage relevance (keyword overlap with the query;
-                 averaged with sigmoid(rerank score) when a reranker is enabled).
+  relevance    - v2 (default, when the Evidence Agent judged the passages): share of the passages given to the
+                 generator whose LLM-judge log-odds are > 0. v1 / no judge: mean over the top-3 passages of
+                 keyword overlap with the query (averaged with sigmoid(rerank score) when a reranker is on).
   coverage     - fraction of query keywords found anywhere in the evidence; if the planner found focus
                  terms (what is asked for, e.g. 'retail price'), averaged with the best single-passage
                  focus-term overlap; with sub-questions, further averaged with the fraction of
@@ -49,7 +50,12 @@ class ConfidenceAgent:
 
     def components(self, plan: RetrievalPlan, evidence: list[Evidence], verification: VerificationResult) -> dict:
         relevance = coverage = None
-        if evidence:
+        judged = [e for e in evidence if e.judge_score is not None]
+        if evidence and self.s.confidence_mode == "v2" and judged:
+            # v2: evidence relevance from the Evidence Agent's LLM judge (independent of the Verifier):
+            # share of passages given to the generator that the judge rated relevant (log-odds > 0)
+            relevance = sum(e.judge_score > 0 for e in judged) / len(judged)
+        elif evidence:
             rels = []
             for e in evidence[:3]:
                 r = e.keyword_overlap
@@ -57,6 +63,7 @@ class ConfidenceAgent:
                     r = (r + sigmoid(e.rerank_score)) / 2
                 rels.append(r)
             relevance = sum(rels) / len(rels)
+        if evidence:
             if plan.keywords:
                 terms: set[str] = set()
                 for e in evidence:
@@ -143,7 +150,15 @@ class ConfidenceAgent:
 
     def select_final(self, attempts: list[AttemptRecord]) -> tuple[AttemptRecord, ConfidenceAssessment]:
         """After the retry budget is spent, pick the best-scoring attempt and apply the fallback rule to it."""
-        best = max(attempts, key=lambda a: (a.confidence.score or 0.0, -a.attempt))
+        if self.s.confidence_mode == "v2":
+            # v2: an attempt with a (partially) verified answer always outranks one without an answer, whose
+            # score only looks high because missing components are excluded from the weighted mean
+            def rank(a: AttemptRecord):
+                answered = not a.answer.insufficient and a.verification.status in ("supported", "partially_supported")
+                return (answered, a.verification.support_score or 0.0, a.confidence.score or 0.0, -a.attempt)
+            best = max(attempts, key=rank)
+        else:
+            best = max(attempts, key=lambda a: (a.confidence.score or 0.0, -a.attempt))
         c = best.confidence
         if best.answer.insufficient or not best.evidence or best.verification.status == "contradicted":
             final = c.model_copy(update={"decision": "abstain",

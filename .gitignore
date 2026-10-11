@@ -32,3 +32,8 @@ frontend/.env*.local
 Thumbs.db
 .vscode/
 .idea/
+
+# Reference PDFs (abstract contains personal data; paper is cited by link instead)
+*.pdf
+!data/sample_documents/*.pdf
+data/datasets/triviaqa_heldout_101_300/

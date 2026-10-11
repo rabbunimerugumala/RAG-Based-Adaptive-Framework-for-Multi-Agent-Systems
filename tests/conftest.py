@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from adaptive_rag.config import Settings
+from adaptive_rag.config import LEGACY_V1, Settings
 from adaptive_rag.generation.llm import INSUFFICIENT_ANSWER
 from adaptive_rag.models import ModelBundle
 from adaptive_rag.pipeline import RAGSystem
 from adaptive_rag.retrieval.embeddings import HashEmbedder
 from adaptive_rag.retrieval.store import KnowledgeBase
 from adaptive_rag.schemas import Evidence, GeneratedAnswer
-from adaptive_rag.text import content_terms
+from adaptive_rag.text import content_terms, keywords
 
 ROOT = Path(__file__).resolve().parents[1]
 SMOKE = ROOT / "data" / "datasets" / "smoke_test"
@@ -32,10 +32,13 @@ class ScriptedLLM:
     is_llm = True
     name = "mock-llm"
 
-    def __init__(self, script: list | Callable[[str, list[Evidence]], GeneratedAnswer]):
+    def __init__(self, script: list | Callable[[str, list[Evidence]], GeneratedAnswer], judge_fn=None):
         self.script = script
+        self.judge_fn = judge_fn
         self.answer_calls = 0
         self.rewrite_calls = 0
+        self.judge_calls = 0
+        self.predict_calls = 0
 
     def answer(self, question: str, evidence: list[Evidence]) -> GeneratedAnswer:
         self.answer_calls += 1
@@ -50,6 +53,22 @@ class ScriptedLLM:
     def rewrite_queries(self, question: str, missing: str) -> list[str]:
         self.rewrite_calls += 1
         return ["kestrel energy density"]
+
+    def judge(self, question: str, passage: str, answer: str | None = None) -> tuple[float, dict]:
+        """Mock evidence judge: +10 if most question keywords (and the answer, if given) are in the passage."""
+        self.judge_calls += 1
+        if self.judge_fn is not None:
+            return self.judge_fn(question, passage, answer), {"mock": True}
+        terms = set(content_terms(passage))
+        q = keywords(question)
+        ok = sum(t in terms for t in q) / max(len(q), 1) >= 0.5
+        if answer is not None:
+            ok = ok and set(content_terms(answer)) <= terms
+        return (10.0 if ok else -10.0), {"mock": True}
+
+    def predict(self, question: str, passage: str) -> str:
+        self.predict_calls += 1
+        return passage.split(".")[0]
 
 
 class FakeNLI:
@@ -74,6 +93,12 @@ def load_smoke_corpus() -> list[dict]:
 def settings(tmp_path) -> Settings:
     return Settings(mode="dev", runtime_dir=tmp_path / "runtime", results_dir=tmp_path / "results",
                     data_dir=ROOT / "data", _env_file=None)
+
+
+@pytest.fixture
+def v1_settings(settings) -> Settings:
+    """The original (v1) Adaptive RAG configuration, kept reproducible for baseline comparisons."""
+    return settings.model_copy(update=LEGACY_V1)
 
 
 @pytest.fixture
