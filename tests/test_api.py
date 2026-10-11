@@ -117,8 +117,9 @@ def test_query_response_exposes_multiagent_fields(client):
     r = client.post("/api/query", json={"question": "Which TCP port do Quillon servers listen on?"}).json()
     assert r["method"] == "adaptive"  # Multi-Agent RAG is the default method
     assert r["support_level"] in ("verified", "partial", "unverified", "none")
-    assert r["evidence_filter"]["mode"] == "pair" and "filtered_evidence" in r
-    assert all(e["judge_score"] is not None for e in r["evidence"])
+    assert "evidence_filter" in r and "filtered_evidence" in r and r["stats"]["retrieval_attempts"] >= 1
+    if r["evidence_filter"]:  # judging happens only when the system escalated to more evidence
+        assert all(e["judge_score"] is not None for e in r["evidence"])
 
 
 def test_evaluation_rejects_unknown_variant(client):

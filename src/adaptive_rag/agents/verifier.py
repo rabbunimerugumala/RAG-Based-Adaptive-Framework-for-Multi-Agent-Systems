@@ -162,6 +162,20 @@ class VerifierAgent:
                 if entail >= s.nli_entail_threshold:
                     best_ref = premises[i_best][0]
             label, reason = self._label(best_lex, entail, contra)
+            if (grounded and label == "contradicted" and self.generator is not None
+                    and s.contradiction_cross_check):
+                # corroboration: NLI alone may not reject a claim the evidence judge confirms on the same passages
+                for r in [r for r in dict.fromkeys(cited + sorted(lex, key=lex.get, reverse=True)) if lex[r] >= 0.5][:2]:
+                    try:
+                        jscore, _ = self.generator.judge(question, by_ref[r].text, claim)
+                    except LLMError:
+                        break
+                    llm_calls += int(self.generator.is_llm)
+                    if jscore > 0:
+                        label, best_ref = "partially_supported", r
+                        reason = (f"conflicting signals: NLI contradiction {contra:.2f}, but the evidence judge "
+                                  f"confirms the claim in [{r}] (log-odds {jscore:.1f}); treated as unresolved")
+                        break
             if (grounded and self.generator is not None and short and label != "supported"
                     and label != "contradicted"):
                 # short answer: require BOTH the answer text in a passage AND the triplet judge's confirmation

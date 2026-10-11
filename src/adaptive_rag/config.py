@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # --- multi-agent v2 (each switch can be turned off to reproduce the original v1 pipeline) -----
     # Evidence Agent: MAIN-RAG-inspired document judging and filtering (Chang et al., ACL 2025, Sec. 3.2-3.3)
     doc_filter: Literal["off", "judge"] = "judge"
+    # always: judge-filter on every round; on_retry: round 1 uses plain hybrid top-k (like Standard RAG) and the
+    # Evidence Agent escalates to judge filtering only when the Confidence Agent requests more evidence
+    doc_filter_stage: Literal["always", "on_retry"] = "on_retry"
     doc_judge_mode: Literal["pair", "triplet"] = Field(
         "pair", description="pair: Judge(doc, question) - adaptation; triplet: paper's Doc-Q-A with per-doc Predictor")
     doc_pool_k: int = Field(10, ge=2, le=30, description="Candidate passages judged per retrieval round")
@@ -88,6 +91,9 @@ class Settings(BaseSettings):
     # Verifier: v1 = original rules; grounded = contradiction only from related, well-formed premises,
     # plus a judge-backed support check for short answers
     verifier_mode: Literal["v1", "grounded"] = "grounded"
+    # grounded mode: an NLI contradiction must be corroborated - if the evidence judge confirms the claim on the
+    # same evidence, the claim is marked unresolved (partially supported) instead of contradicted
+    contradiction_cross_check: bool = True
     # Confidence: v1 = original decision rules; v2 = judge-based evidence relevance, partial answers,
     # attempt selection that prefers verified answers
     confidence_mode: Literal["v1", "v2"] = "v2"

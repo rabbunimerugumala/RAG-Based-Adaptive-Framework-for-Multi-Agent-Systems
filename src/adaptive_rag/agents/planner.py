@@ -74,10 +74,12 @@ class PlannerAgent:
         kw_query = " ".join(kws)
         if len(kws) >= 2 and kw_query.lower() != query.lower():
             queries.append(kw_query)
-        pool_k = max(s.doc_pool_k, top_k) if s.doc_filter == "judge" else 0
+        pool_k = max(s.doc_pool_k, top_k) if s.doc_filter == "judge" and s.doc_filter_stage == "always" else 0
         expl = f"Query classified as '{qtype}'. Hybrid search with {len(queries)} query variant(s), evidence budget top_k={top_k}."
         if pool_k:
             expl += f" Evidence Agent will judge {pool_k} candidate passages and keep those above the adaptive bar."
+        elif s.doc_filter == "judge":
+            expl += " Evidence filtering is held back and used only if more evidence is needed."
         if subs:
             expl += f" Decomposed into {len(subs)} sub-question(s) so each part gets its own evidence."
         return RetrievalPlan(
@@ -86,6 +88,15 @@ class PlannerAgent:
             search_queries=queries, top_k=top_k, candidate_k=s.candidate_k, pool_k=pool_k, strategy="initial",
             explanation=expl,
         )
+
+    def _retry_pool(self, previous: RetrievalPlan, strategy: str) -> int:
+        """Evidence budget for a retry: escalate to (or widen) judge-based filtering of a larger candidate pool."""
+        s = self.settings
+        if s.doc_filter != "judge":
+            return 0
+        extra = 5 if strategy == "broaden" else 0
+        base = previous.pool_k or max(s.doc_pool_k, previous.top_k)
+        return min(base + extra, 30)
 
     def replan(
         self, previous: RetrievalPlan, strategy: str, evidence: list[Evidence],
@@ -134,7 +145,7 @@ class PlannerAgent:
             "search_queries": queries,
             "top_k": min(previous.top_k + bump, 12),
             "candidate_k": min(previous.candidate_k * (2 if strategy == "broaden" else 1), 100),
-            "pool_k": min(previous.pool_k + (5 if strategy == "broaden" else 0), 30) if previous.pool_k else 0,
+            "pool_k": self._retry_pool(previous, strategy),
             "strategy": f"retry-{attempt}:{strategy}",
             "explanation": f"Retry {attempt} ({strategy}): " + "; ".join(notes or ["re-running with a larger top_k"]) + ".",
         })

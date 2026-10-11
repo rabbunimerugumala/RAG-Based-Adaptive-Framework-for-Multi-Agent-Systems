@@ -80,6 +80,7 @@ def test_jaccard_dedup_measure():
 
 # ------------------------------------------------------------------ Evidence Agent end to end
 def test_evidence_agent_filters_with_judge_and_renumbers(settings, smoke_kb):
+    settings = settings.model_copy(update={"doc_filter_stage": "always"})
     llm = ScriptedLLM([])
     plan = PlannerAgent(settings, llm).plan("Who created the Quillon messaging protocol?")
     assert plan.pool_k == settings.doc_pool_k
@@ -92,6 +93,7 @@ def test_evidence_agent_filters_with_judge_and_renumbers(settings, smoke_kb):
 
 
 def test_evidence_agent_judge_cache_avoids_rejudging(settings, smoke_kb):
+    settings = settings.model_copy(update={"doc_filter_stage": "always"})
     llm = ScriptedLLM([])
     agent = EvidenceAgent(settings, smoke_kb, None, llm)
     plan = PlannerAgent(settings, llm).plan("Who created the Quillon messaging protocol?")
@@ -103,7 +105,7 @@ def test_evidence_agent_judge_cache_avoids_rejudging(settings, smoke_kb):
 
 
 def test_evidence_agent_triplet_mode_uses_predictor(settings, smoke_kb):
-    s = settings.model_copy(update={"doc_judge_mode": "triplet", "doc_pool_k": 3})
+    s = settings.model_copy(update={"doc_judge_mode": "triplet", "doc_pool_k": 3, "doc_filter_stage": "always"})
     llm = ScriptedLLM([])
     plan = PlannerAgent(s, llm).plan("Who created the Quillon messaging protocol?")
     pkg = EvidenceAgent(s, smoke_kb, None, llm).retrieve(plan)
@@ -112,6 +114,7 @@ def test_evidence_agent_triplet_mode_uses_predictor(settings, smoke_kb):
 
 
 def test_evidence_agent_falls_back_when_judge_fails(settings, smoke_kb):
+    settings = settings.model_copy(update={"doc_filter_stage": "always"})
     def broken(q, p, a):
         raise LLMError("timeout")
     llm = ScriptedLLM([], judge_fn=broken)
@@ -224,16 +227,49 @@ def test_v2_relevance_uses_judge_scores(settings):
 
 
 # ------------------------------------------------------------------ v2 pipeline end to end
-def test_v2_pipeline_accepts_correct_short_answer_and_reports_filtering(settings, smoke_kb):
+def test_v2_pipeline_accepts_correct_short_answer_without_escalation(settings, smoke_kb):
     llm = ScriptedLLM([("Mara Ostberg [1]", [1])])
     r = make_system(settings, smoke_kb, llm, QuestionStyleNLI()).run_adaptive("Who created the Quillon messaging protocol?")
     assert r.status == "answered" and r.support_level == "verified" and r.unresolved_claims == []
+    assert r.stats.retrieval_attempts == 1 and r.evidence_filter is None  # round 1: plain evidence, no judging
+    assert r.citations[0].doc_id == "quillon_protocol"
+    assert r.stats.llm_calls == 1 + r.verification.llm_calls
+
+
+def test_v2_pipeline_escalates_to_judge_filtering_on_retry(settings, smoke_kb):
+    llm = ScriptedLLM([None, ("Quillon servers listen on TCP port 7425 by default [1].", [1])])
+    r = make_system(settings, smoke_kb, llm, FakeNLI()).run_adaptive("Which TCP port do Quillon servers listen on by default?")
+    assert r.status == "answered" and r.stats.retrieval_attempts == 2
     assert r.evidence_filter is not None and r.evidence_filter.judge_calls > 0
     assert len(r.evidence) + len(r.filtered_evidence) == r.evidence_filter.pool_size
-    assert r.citations[0].doc_id == "quillon_protocol"
-    assert r.stats.llm_calls == 1 + r.evidence_filter.judge_calls + r.verification.llm_calls
-    ev_step = next(t for t in r.trace if t.step == "evidence")
-    assert "tau_q" in ev_step.decision and ev_step.output["filter"]["threshold"] is not None
+    ev_steps = [t for t in r.trace if t.step == "evidence"]
+    assert ev_steps[0].output["filter"] == {"mode": "off"} and "tau_q" in ev_steps[1].decision
+
+
+def test_v2_always_mode_judges_first_round(settings, smoke_kb):
+    s = settings.model_copy(update={"doc_filter_stage": "always"})
+    llm = ScriptedLLM([("Mara Ostberg [1]", [1])])
+    r = make_system(s, smoke_kb, llm, QuestionStyleNLI()).run_adaptive("Who created the Quillon messaging protocol?")
+    assert r.evidence_filter is not None and r.stats.llm_calls == 1 + r.evidence_filter.judge_calls + r.verification.llm_calls
+
+
+def test_nli_contradiction_needs_corroboration(settings):
+    class ContradictsEverything:
+        name = "contradicts"
+
+        def predict(self, pairs):
+            return [{"entailment": 0.01, "contradiction": 0.97} for _ in pairs]
+
+    evidence = [ev(1, "MC Hammer launched the Too Legit to Quit Tour in 1992.", 5.0)]
+    ans = GeneratedAnswer(answer="MC Hammer had a Too Legit to Quit Tour [1].", cited_refs=[1], insufficient=False)
+    res, _ = VerifierAgent(settings, ContradictsEverything(), ScriptedLLM([])).verify("Who had a Too Legit To Quit Tour?", ans, evidence)
+    assert res.status == "partially_supported" and "conflicting signals" in res.claims[0].reason
+    no_x = settings.model_copy(update={"contradiction_cross_check": False})
+    res2, _ = VerifierAgent(no_x, ContradictsEverything(), ScriptedLLM([])).verify("Who had a Too Legit To Quit Tour?", ans, evidence)
+    assert res2.status == "contradicted"
+    judge_no = ScriptedLLM([], judge_fn=lambda q, p, a: -5.0)
+    res3, _ = VerifierAgent(settings, ContradictsEverything(), judge_no).verify("Who had a Too Legit To Quit Tour?", ans, evidence)
+    assert res3.status == "contradicted"  # both verifiers disagree with the claim
 
 
 def test_v2_pipeline_partial_answer_lists_unresolved_claims(settings, smoke_kb):
