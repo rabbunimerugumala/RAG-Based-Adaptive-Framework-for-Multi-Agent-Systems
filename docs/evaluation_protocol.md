@@ -1,94 +1,111 @@
 # Evaluation Protocol
 
-## 1. Two separate workflows
+## 1. Separation of data
 
-1. **User documents**: uploaded in the UI, stored in `data/runtime/kb/`. Used for demos; never used for metrics.
-2. **Benchmarks**: fixed datasets in `data/datasets/<name>/`, each indexed into its **own** knowledge base
-   (`data/runtime/benchmarks/<name>/`). Results from different datasets are never compared with each other.
+| Role | Dataset | Use |
+|---|---|---|
+| Smoke test | `smoke_test` (24 synthetic questions, committed) | checks that the pipeline runs; **not** a benchmark |
+| Development / validation | `triviaqa_unfiltered_sample` = TriviaQA-unfiltered validation questions 1–100 | the **original baseline** (run `20261010-223619-6d2293`, kept unchanged) and all design decisions for v2 |
+| Held-out test | `triviaqa_heldout_101_300` = validation questions 101–300, minus 1 question shared with the development sample → **199 questions** | run **once**, after the v2 code was frozen; never used for tuning |
 
-## 2. Dataset format
+User-uploaded documents (`data/runtime/kb/`) are never used for evaluation; each benchmark corpus has its own index
+(`data/runtime/benchmarks/<dataset>/`). Results from different datasets are never compared with each other.
 
+## 2. Datasets
+
+### 2.1 TriviaQA-unfiltered samples (research benchmark samples)
+
+* Source: TriviaQA (Joshi et al., ACL 2017), https://nlp.cs.washington.edu/triviaqa/, via the Hugging Face mirror
+  `mandarjoshi/trivia_qa`, config `unfiltered`, split `validation`, streamed (the full archive is not downloaded).
+* Licence: the TriviaQA repository states Apache-2.0; the evidence documents are third-party web/Wikipedia text.
+  Prepared files are git-ignored and not redistributed; the scripts below re-create them.
+* Evidence per question: Wikipedia entity pages (first 6,000 characters) + first 3 web results (first 3,000
+  characters). Truncation keeps the leading text and never looks for the answer. All questions' documents form one
+  pooled corpus, so other questions' documents act as distractors.
+* `answerable` = a gold alias (TriviaQA `value` + `aliases`) occurs in at least one retained document;
+  `gold_doc_ids` = those documents. Unanswerable-given-evidence questions measure abstention.
+* Counts: development 100 (76 answerable / 24 not), 475 documents; held-out 199 (165 / 34), 978 documents.
+
+```powershell
+python evaluation/prepare_triviaqa.py --n 100                                          # development
+python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300 `
+    --exclude-dataset data/datasets/triviaqa_unfiltered_sample                          # held-out test
+python evaluation/validate_dataset.py
 ```
-data/datasets/<name>/
-  dataset.json      name, title, description, source, license, synthetic (true/false)
-  corpus.jsonl      {"doc_id", "title", "text"}                          one evidence document per line
-  questions.jsonl   {"id", "question", "answers": [aliases], "answerable": bool, "gold_doc_ids": [...], "type"}
-```
 
-`python evaluation/validate_dataset.py` checks the files and prints the number of **usable** questions
-(rows with an id, a question, answers when answerable, and gold documents that exist in the corpus).
+### 2.2 Smoke test
 
-## 3. Datasets
+8 fictional documents, 24 questions (18 answerable, 6 unanswerable). Verifies grounding without memorised knowledge.
 
-### 3.1 `smoke_test` — synthetic (committed)
+## 3. Systems compared
 
-- 8 short documents about **invented** entities (a town, a battery, a moth, a protocol, ...), written for this project.
-- 24 questions: **18 answerable** (factoid, numeric, multi-part, comparison) and **6 unanswerable** (plausible
-  questions whose answer is deliberately absent).
-- Invented entities stop the LLM from answering from memory, so it tests grounding.
-- Purpose: verify the pipeline end to end. **It is not a research benchmark** and the UI labels it "synthetic".
+All systems share the knowledge base, retriever (bge-small + BM25 + RRF), generator (Qwen3-4B Q4 via Ollama,
+temperature 0, seed 42), prompt, NLI model, evidence budget (top-k = 5), questions and question order.
 
-### 3.2 `triviaqa_unfiltered_sample` — research benchmark sample (prepared locally)
+| Name | System | Differences from the full system |
+|---|---|---|
+| `standard` | Standard RAG baseline | single retrieval (1 query, top-5), single draft, no verification in the decision |
+| `adaptive` | **Multi-Agent RAG v2 (proposed)** | – |
+| `adaptive_no_retry` | ablation | `max_retries = 0` (no additional retrieval) |
+| `adaptive_no_filter` | ablation | `doc_filter = off` (retries without judged evidence filtering) |
+| `adaptive_v1` | original pipeline | `config.LEGACY_V1`: no filtering, v1 verifier, v1 confidence |
 
-- Source: TriviaQA (Joshi et al., ACL 2017), https://nlp.cs.washington.edu/triviaqa/, accessed through the Hugging
-  Face mirror `mandarjoshi/trivia_qa`, config `unfiltered`, split `validation`, in streaming mode (the 3 GB archive is
-  not downloaded).
-- Licence: the TriviaQA repository states Apache-2.0 for code and data; the website notes the authors do not own the
-  copyright of the evidence documents (Wikipedia and web pages). The prepared files are **git-ignored** and not
-  redistributed; anyone can re-create them with the script.
-- Preparation (`python evaluation/prepare_triviaqa.py --n 100`):
-  - the first 100 validation questions in dataset order;
-  - each question keeps its Wikipedia entity pages (first 6,000 characters) and its first 3 web search results
-    (first 3,000 characters). Truncation keeps the **leading** text and never looks for the answer, so it is unbiased;
-  - all documents are pooled into one corpus (475 documents), so other questions' documents act as distractors;
-  - gold aliases = TriviaQA `value` + `aliases`; `gold_doc_ids` = retained documents containing an alias;
-  - `answerable` = at least one retained document contains an alias. In our sample **76** questions are
-    answerable and **24** are not ("unanswerable given the evidence"), which lets us measure abstention.
+Unavoidable differences: Multi-Agent RAG searches with 2 query variants in round 1 (question + keywords) and may
+retrieve more candidates on retries; this is part of the method being evaluated.
 
 ## 4. Procedure
 
 ```powershell
-python evaluation/run_benchmark.py --dataset <name> --mode real [--limit N --seed 0]
+python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
+    --methods standard,adaptive,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20
+python evaluation/analyze_results.py <run_id>
 ```
 
-1. Load and validate the dataset; if `--limit` is given, take a fixed-seed random sample (kept in file order).
-2. Build (or reuse) the benchmark index with the configured embedder and chunk settings.
-3. For **each question**, run every selected method **in the same order**, with the same knowledge base, retriever,
-   generator, prompt and default `top_k`. The LLM uses temperature 0 and a fixed seed.
-4. Score each response, aggregate per method, and write `results.json` (configuration, model names, dataset
-   manifest, question ids, per-question rows, summary, runtime) and `results.csv`.
-5. Errors are recorded as failed rows and counted (`n_errors`); they are never dropped silently.
-6. Results are written only after the run finishes successfully.
+1. Load and validate the dataset; build or reuse its separate index.
+2. For each question, run every system in the same order (interleaved, so they share warm-up and hardware state).
+3. Score each response; errors become failed rows (`n_errors`), never dropped.
+4. `--repeat N` re-runs the first N questions per system to measure response consistency.
+5. Write `results.json` (configuration, variant settings, model names, software version + git commit, dataset
+   manifest, question ids, per-question rows with per-attempt drafts and decisions, summaries, consistency) and
+   `results.csv`.
 
 ## 5. Metric definitions
 
-Answer normalisation (SQuAD/TriviaQA style): lower-case, remove punctuation and the articles a/an/the, collapse spaces.
-*Abstained* means the response status is not `answered`.
+Normalisation (SQuAD/TriviaQA): lower-case, remove punctuation and a/an/the. *Abstained* = status is not `answered`.
 
-| Metric | Definition | Computed over |
-|---|---|---|
-| **Accuracy** | answered **and** some normalised gold alias occurs in the normalised answer as a whole-word sequence; abstention counts as wrong | answerable questions |
-| Exact match | normalised answer == some normalised alias (strict; low for sentence-style answers, reported for completeness) | answerable |
-| Token F1 | max over aliases of token-overlap F1 between answer and alias | answerable |
-| Answer rate (answerable) | fraction of answerable questions that were answered | answerable |
-| **Selective accuracy** | accuracy among the answered answerable questions | answered answerable |
-| **Correct abstention** | fraction of unanswerable questions where the system abstained | unanswerable |
-| **Wrong abstention** | fraction of answerable questions where the system abstained | answerable |
-| Cites gold document | at least one valid citation points to a gold document | answered answerable questions with gold docs |
-| Evidence recall | some retrieved passage contains a gold alias (retrieval quality) | answerable |
-| Mean support score | mean verifier support score of answered questions | answered |
-| Latency | wall-clock pipeline time per question (excludes Standard RAG's post-hoc verification) | all |
-| LLM calls | answer generations + planner query reformulations | all |
-| Retrieval attempts | 1 + number of adaptive retries | all |
+| # | Metric | Definition | Over |
+|---|---|---|---|
+| 1 | **Accuracy** | answered and a normalised gold alias occurs in the normalised answer (whole words); abstention counts as wrong | answerable |
+| 2 | Evidence relevance – **precision** | mean share of passages given to the generator that contain a gold alias | answerable |
+| 2b | Evidence relevance – **recall** | some passage given to the generator contains a gold alias | answerable |
+| 3 | **Grounded answers** (faithfulness, verifier-independent) | ≥ 80 % of the answer's content terms occur in its cited passages (all passages if none cited) | answered |
+| 3b | Mean support score / verified rate | from this project's own verifier – descriptive only, not independent | answered |
+| 4 | **Citation correctness** | at least one valid citation points to a gold document | answered answerable with gold docs |
+| 5 | Answer completeness | not applicable to TriviaQA (single-answer questions) – not reported | – |
+| 6 | **Response consistency** | share of repeat runs whose normalised answer equals the first run's (and same status) | first N questions |
+| 7 | **Latency** | wall-clock pipeline time per question; reported as mean, median, cold (first question) and warm mean | all |
+| 8 | **LLM calls** | drafts + judge calls + per-passage predictions + query rewrites + verifier judge calls | all |
+| 9 | **Retrieval rounds** | 1 + adaptive retries | all |
+| 10 | **Abstention rate** | abstained / all | all |
+| 11 | **False (wrong) abstention rate** | abstained / answerable | answerable |
+| 11b | Correct abstention rate | abstained / unanswerable | unanswerable |
+| 12 | **Unsupported-answer rate** | answered but not correct (wrong answers to answerable + any answer to unanswerable) / answered | answered |
+| – | Selective accuracy | correct / answered answerable | answered answerable |
+| – | Exact match, token F1 | strict string metrics, reported for completeness | answerable |
 
-## 6. Known measurement caveats
+## 6. Statistics
 
-- Alias matching can miss correct paraphrases ("fourteen days" vs "14 days") and can accept an answer that mentions
-  the alias in a wrong statement.
-- **Mean support score uses this project's own verifier**, so it is not independent evidence of faithfulness and
-  favours the method that optimises it (Adaptive). Treat it as descriptive.
-- Unanswerable labels in the TriviaQA sample are derived from truncated evidence; the model could still know the
-  answer from pre-training. Answering such a question correctly from memory is counted as "not abstaining".
-- 24 or 100 questions give wide confidence intervals: with n = 76, one question is 1.3 percentage points.
-- Confidence scores are not calibrated probabilities; no calibration study has been done.
-- Dev mode results only test the software and must never be reported as experimental results (they are labelled).
+* Paired comparisons on the same questions use the **exact two-sided McNemar test** (binomial test with p = 0.5 on
+  the discordant pairs; questions both systems got right, or both wrong, carry no information about the difference).
+  Assumptions: binary outcome per question, questions independent.
+* Reported with the discordant counts, never alone. No superiority is claimed unless p < 0.05 on the held-out
+  test, and even then only for this model, corpus and sample.
+* `evaluation/analyze_results.py` recomputes all metrics from the rows and runs the tests (also across two runs).
+
+## 7. Caveats
+
+* Alias matching misses paraphrases and can accept an alias used in a wrong statement.
+* Support score and "verified" use the project's own verifier; the grounded-answer metric is lexical.
+* Unanswerable labels come from truncated evidence; a model may still know the answer from pre-training.
+* The first question of a run includes model warm-up (reported as cold latency).
+* Confidence scores are heuristics; no calibration study was performed.

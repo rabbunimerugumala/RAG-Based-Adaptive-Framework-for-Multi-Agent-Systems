@@ -1,168 +1,126 @@
 # How It Works — a plain-language guide
 
-This page explains the whole project step by step, assuming only basic computer-science knowledge.
+This page explains the project step by step, assuming only basic computer-science knowledge.
 
 ---
 
 ## 1. The problem
 
-Large Language Models (LLMs) such as ChatGPT or Qwen write fluent answers, but:
+Large Language Models (LLMs) write fluent answers, but they **do not know your private documents** and they sometimes
+**make things up** ("hallucinate") with full confidence.
 
-1. they **do not know your private documents** (college rules, a company manual, your notes), and
-2. they sometimes **make things up** ("hallucinate") with full confidence.
-
-## 2. What is RAG?
-
-**Retrieval-Augmented Generation (RAG)** fixes problem 1:
+## 2. Retrieval-Augmented Generation (RAG)
 
 ```
-Your question ──► search your documents ──► give the best passages to the LLM ──► LLM writes the answer
+question → search your documents → give the best passages to the LLM → the LLM answers from them, with citations
 ```
 
-The LLM is told: *"answer only from these passages and cite them"*. This is **Standard RAG**, our baseline.
+This is **Standard RAG**, our baseline. Its weaknesses: it trusts whatever the search returns, nobody checks the
+answer against the passages, and it rarely says "I don't know".
 
-Standard RAG still has weaknesses:
+## 3. Our system: Multi-Agent RAG
 
-- If the search returns the wrong passages, the LLM may still answer (wrongly).
-- Nobody checks whether each sentence of the answer is really supported by the passages.
-- It never says "I don't know" unless the LLM itself decides to.
-
-## 3. Our idea: Adaptive Multi-Agent RAG
-
-We split the work among **four agents**. Each is a small, separate Python class with one clear job.
-They all share **one** local LLM (loaded once), and only two steps actually use it.
+Four specialised agents share **one** local LLM (loaded once). Each is a separate Python class with a clear job:
 
 | # | Agent | Job in one line | Uses the LLM? |
 |---|---|---|---|
-| 1 | **Planner** | Understand the question and plan the search | only on a retry (to suggest new search queries) |
-| 2 | **Evidence** | Find the best passages (keyword + meaning search) | no |
-| – | *Answer generator* | Write a draft answer with citations | **yes** |
-| 3 | **Verifier** | Check every claim in the draft against the passages | no (uses a small NLI model) |
-| 4 | **Confidence** | Score the answer and decide: accept, retry, or abstain | no |
+| 1 | **Planner** | understand the question and plan the search (and plan a better search if the first one fails) | only when re-planning |
+| 2 | **Evidence** | find passages; when more evidence is needed, judge every candidate passage and keep the useful ones | as a *judge*, only when escalated |
+| – | answer generator | write a draft answer with citations | yes |
+| 3 | **Verifier** | check every claim of the draft against the passages | only to confirm short answers or cross-check a contradiction |
+| 4 | **Confidence** | score the answer and decide: answer, retrieve again (max 2), or abstain | no |
 
+```mermaid
+flowchart LR
+    Q[Question] --> P[Planner] --> E[Evidence] --> D[Draft] --> V[Verifier] --> C{Confidence}
+    C -->|supported| A[Answer + citations]
+    C -->|weak, budget left| P
+    C -->|still unsupported| X[Abstain]
 ```
-             ┌───────────────────────────── retry (max 2) ─────────────────────────────┐
-             ▼                                                                         │
-Question → Planner → Evidence → Draft answer → Verifier → Confidence ── accept ──► Answer + citations
-                                                                    └── abstain ──► "Not enough evidence"
-```
+
+The system is **adaptive**: an easy question stops after one round (about the cost of Standard RAG plus checking);
+only hard questions trigger the extra agent work.
 
 ## 4. Before any question: indexing documents
 
-When you upload a file on the **Document Library** page:
+1. Validate the file (PDF with text, DOCX, TXT, Markdown; max 20 MB; safe filename).
+2. Detect duplicates (SHA-256 of the content).
+3. Extract text (per page for PDFs). Scanned PDFs are rejected because OCR is not implemented.
+4. Chunk into ~900-character pieces with 150 characters of overlap, cutting at sentence ends; chunks keep page numbers.
+5. Embed each chunk into a 384-number vector (`bge-small-en-v1.5`) and store it in Qdrant; also index words for BM25.
 
-1. **Validate**: only PDF/DOCX/TXT/MD, max 20 MB; the filename is cleaned (no `../` tricks).
-2. **Duplicate check**: a SHA-256 hash of the content; identical files are not indexed twice.
-3. **Extract text**: `pypdf` for PDFs (per page), `python-docx` for Word (paragraphs + tables), plain decode for TXT/MD.
-   Scanned PDFs (images only) are rejected with a message, because OCR is not implemented.
-4. **Chunk**: split into pieces of about 900 characters with 150 characters of overlap, cutting at sentence or
-   paragraph ends where possible. Chunks never cross PDF pages, so every citation keeps its page number.
-5. **Embed**: each chunk becomes a 384-number vector (its "meaning") using the `bge-small-en-v1.5` model.
-6. **Store**: vectors go into **Qdrant** (a vector database running inside our Python process); the text is also
-   added to a **BM25** keyword index.
+## 5. Walk-through of one question
 
-## 5. Walk-through of one real question
+> **"How many books can an undergraduate student borrow and for how long?"** (sample file `college_library_rules.txt`)
 
-Question (asked against the sample file `college_library_rules.txt`):
+**Step 1 — Planner (rules).** Not small talk, so retrieval is needed. Type `numeric`; keywords `many, book,
+undergraduate, student, borrow, long`; focus term `book`; evidence budget 5 passages; search queries = the question
+plus a keyword-only version. Evidence filtering is *held back* for now.
 
-> **"How many books can an undergraduate student borrow and for how long?"**
+**Step 2 — Evidence, round 1.** For each query: meaning search (Qdrant cosine similarity) and keyword search (BM25),
+merged with Reciprocal Rank Fusion (`Σ 1/(60 + rank)`); the top 5 passages are numbered `[1]…[5]`.
 
-### Step 1 — Planner Agent (rules, no LLM)
+**Step 3 — Draft.** The LLM gets the numbered passages and strict rules (use only these, cite `[n]`, say
+"insufficient" otherwise) and returns JSON, e.g. *"An undergraduate student can borrow up to 4 books for a period of
+14 days. [1]"*.
 
-- Is it small talk like "hello"? No, so retrieval is needed.
-- **Type**: `numeric` (it starts with "how many"), using simple patterns (comparison, multi-part, numeric, definition, ...).
-- **Keywords**: `many, book, undergraduate, student, borrow, long` (stop-words removed, light stemming).
-- **Focus terms**: what is actually being asked for: here `book` (in "What is the retail price of X?" it would be `retail, price`).
-- **Sub-questions**: comparison and two-part questions are split so each part gets its own search.
-- **Plan**: search queries = the question itself + a keyword-only query, `top_k = 5`.
+**Step 4 — Verifier.** The draft is split into claims. For each claim:
+* **lexical support**: share of its important words found in a passage; every number must match exactly;
+* **NLI**: a small Natural-Language-Inference model reads *passage → claim* and gives entailment/contradiction
+  probabilities;
+* **short answers** (≤ 4 words, e.g. "Niger"): supported only if the answer text is in a passage **and** the LLM
+  judge confirms that passage supports it;
+* **contradictions must be corroborated**: if NLI says "contradiction" but the LLM judge confirms the claim, the claim
+  is marked *unresolved* instead of contradicted.
 
-### Step 2 — Evidence Agent (no LLM)
-
-For every planned query it runs **two searches**:
-
-- **Dense search** in Qdrant: finds chunks with similar *meaning* (cosine similarity of vectors).
-- **BM25 search**: finds chunks containing the same *words*, weighted by how rare the words are.
-
-The ranked lists are merged with **Reciprocal Rank Fusion**: each chunk gets `Σ 1/(60 + rank)` over all lists.
-A chunk ranked high by both methods wins. The top 5 passages are numbered `[1]...[5]` with filename, page and chunk id.
-
-> Important: a high retrieval score means *"related to the question"*, not *"the claim is true"*.
-
-### Step 3 — Draft answer (the only LLM call in a normal run)
-
-The LLM (Qwen3-4B, running in Ollama) receives the numbered passages and strict rules: use only these passages,
-cite `[n]`, and say "insufficient" if the answer is not there. It returns JSON:
-
-```json
-{"answer": "An undergraduate student can borrow up to 4 books for a period of 14 days. [1]",
- "citations": [1], "insufficient": false}
-```
-
-### Step 4 — Verifier Agent (no LLM)
-
-1. Split the answer into **claims** (sentences; compound sentences such as "X ..., while Y ..." are split further).
-2. For each claim compute:
-   - **Lexical support**: what fraction of the claim's important words appear in a passage. Any **number** in the claim
-     must appear in that passage (so "5 books" vs "4 books" fails).
-   - **NLI entailment**: a small Natural Language Inference model (`nli-deberta-v3-xsmall`) reads
-     *passage → claim* and outputs probabilities for *entailment / contradiction / neutral*.
-3. Label each claim: **supported** (NLI entailment ≥ 0.5), **contradicted** (NLI contradiction ≥ 0.6 on a related
-   passage), **partially supported** (words match but NLI does not confirm), or **unsupported**.
-
-Result for our example: 1/1 claims supported, citation consistent.
-
-### Step 5 — Confidence Agent (no LLM)
-
-It combines four numbers, each between 0 and 1:
+**Step 5 — Confidence.**
 
 ```
-C = 0.25 × relevance + 0.25 × coverage + 0.35 × verification + 0.15 × consistency
+C = 0.25 × relevance + 0.25 × coverage + 0.35 × verification + 0.15 × consistency   (each between 0 and 1)
 ```
 
-| Component | Meaning |
-|---|---|
-| relevance | how well the top 3 passages match the question's keywords |
-| coverage | are all keywords / focus terms / sub-questions found in the evidence? |
-| verification | supported = 1, partially = 0.5, unsupported = 0 (averaged over claims) |
-| consistency | do the cited passages really support the claims they are attached to? |
-
-Decision rules (thresholds are configurable experiment settings):
-
-- **accept** if C ≥ 0.65 and the verifier says supported / partially supported;
-- otherwise **retry** (if retries are left) — back to the Planner with a strategy:
-  - *broaden* (weak retrieval): more candidates, a larger top-k, relaxed keyword queries;
-  - *targeted* (unsupported claims): search specifically for the unsupported claims and missing keywords;
-    with a real LLM, the Planner also asks it for up to 3 reformulated search queries;
-- after the 2nd retry, take the best attempt: **accept** if C ≥ 0.40 and it is at least partially supported,
+* answer if C ≥ 0.65 and the claims are (partially) supported; this example has one supported claim, so it is
+  **answered** after one round;
+* otherwise **retrieve again** (up to 2 times) with a new plan;
+* after the last retry: answer if C ≥ 0.40 and at least partially supported (unresolved claims are listed),
   otherwise **abstain**.
 
-Our example scored **C = 0.83 → accept** on the first attempt (1 LLM call, about 5 s).
+C is a transparent heuristic, **not** a calibrated probability.
 
-### Step 6 — What you see
+## 6. What happens on a retry (the MAIN-RAG-inspired part)
 
-The UI shows the answer with clickable citations `[1]`, the evidence passages and their scores, the verifier's
-claim table, the confidence components, and the **Agent Trace** page with every step's real input/output and timing.
+When the Confidence Agent asks for more evidence:
 
-## 6. Example of abstention
+1. The **Planner** builds new searches: queries from the unsupported claims and missing keywords, broader keyword
+   pairs, and up to 3 reformulations suggested by the LLM.
+2. The **Evidence Agent** retrieves a larger pool (10–30 passages) and, following MAIN-RAG (ACL 2025):
+   * removes near-duplicate passages;
+   * asks the LLM, for every passage, *"Does this document provide specific information for answering the question?
+     Yes or No"*, and reads the token probabilities: **score = log P(Yes) − log P(No)**;
+   * computes the per-question bar **τ = mean of the scores** (optionally mean − n·σ);
+   * keeps passages scoring ≥ τ, orders them from best to worst, and keeps at most 5.
+3. A new draft is written from these filtered passages and verified again.
 
-> **"What is the WiFi password of the library?"**
+Example from the development set: *"What was Walter Matthau's first movie?"* Standard RAG answered "insufficient";
+with judged evidence the Multi-Agent system found the right passage and answered *"The Kentuckian (1955)"*, verified.
 
-The documents never mention WiFi. The LLM reports "insufficient", the Confidence Agent retries twice with broader and
-targeted searches, still finds nothing, and the system **abstains** (3 attempts, about 19 s) instead of guessing.
+## 7. Example of abstention
 
-## 7. How do we know if it is better? (Evaluation)
+> **"What is the WiFi password of the library?"** The documents never mention WiFi. The draft says "insufficient",
+> two retries with broader and filtered evidence find nothing, and the system **abstains** instead of guessing.
 
-Both methods answer **the same questions** from **the same document collection**, and we measure accuracy,
-correct abstention on unanswerable questions, wrong abstention on answerable ones, citation correctness,
-latency and number of LLM calls. See [evaluation_protocol.md](evaluation_protocol.md) and the actual numbers in
+## 8. Is it better? (Evaluation)
+
+Both systems answer **the same questions** from **the same documents** with the same LLM. We measure accuracy, wrong
+and correct abstention, evidence precision and recall, groundedness, citation correctness, consistency, latency and
+LLM calls, and test differences with an exact McNemar test. Design decisions were made on a development set
+(TriviaQA questions 1–100); the final comparison uses 199 different questions. The measured numbers are in
 [results.md](results.md).
 
-## 8. Key takeaways
+## 9. Key takeaways
 
-- RAG grounds answers in documents; our framework adds **checking** (Verifier), **scoring** (Confidence) and
-  **adaptive behaviour** (retry/abstain).
-- The agents are real, separate modules with different responsibilities, not four names for one LLM call.
-- Everything is local and free: Ollama, Qdrant local mode, fastembed, Hugging Face transformers.
-- The trade-off: extra checking costs extra time and LLM calls. In our measurements it did **not** improve accuracy on
-  TriviaQA, because the verifier wrongly rejected some short correct answers; see [results.md](results.md). Knowing
-  and explaining this honestly is part of the research result.
+* RAG grounds answers in documents; our four agents add **planning**, **evidence filtering**, **claim verification**
+  and **confidence-based decisions** (answer / retry / abstain).
+* The agents are separate modules with different inputs and outputs, not four names for one LLM call.
+* Everything is local and free: Ollama, Qdrant local mode, fastembed, Hugging Face transformers.
+* Checking costs time and LLM calls; the adaptive design spends that cost only on questions that need it.
