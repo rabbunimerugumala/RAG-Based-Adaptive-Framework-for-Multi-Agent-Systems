@@ -16,7 +16,8 @@ export const CHART_METRICS: [string, string][] = [
 // Colour follows the system (fixed order), never its rank. Palette validated with the dataviz checker.
 const SERIES: Record<string, { label: string; color: string }> = {
   standard: { label: "Standard RAG", color: "var(--series-1)" },
-  adaptive: { label: "Multi-Agent RAG (full)", color: "var(--series-2)" },
+  adaptive: { label: "Multi-Agent RAG", color: "var(--series-2)" },
+  adaptive_v2: { label: "Multi-Agent v2 (routing off)", color: "var(--series-7)" },
   adaptive_no_retry: { label: "Multi-Agent, no retries", color: "var(--series-3)" },
   adaptive_no_filter: { label: "Multi-Agent, no filtering", color: "var(--series-4)" },
   adaptive_v1: { label: "Multi-Agent v1 (original)", color: "var(--series-5)" },

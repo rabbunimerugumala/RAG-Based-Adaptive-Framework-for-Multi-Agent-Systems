@@ -12,7 +12,8 @@ Docker, no cloud.
 > answered more answerable questions correctly than Standard RAG in both runs — 73.9 % vs 67.9 % (p = 0.021) and
 > 72.7 % vs 69.1 % (p = 0.146, exact McNemar) — mainly through fewer wrong refusals, at 4–4.5× the mean latency.
 > The improvement was significant in one of the two runs, so it is promising but not yet conclusive. An optional
-> **question-routing** mode kept the same accuracy (73.3 %) with 21 % fewer LLM calls. One dataset, one 4B model:
+> **question routing** (now the default) kept v2's accuracy (73.3 % vs 72.7 %) with 21 % fewer LLM calls and 26 %
+> lower mean latency; its gain over Standard RAG was not statistically significant (p = 0.065). One dataset, one 4B model:
 > see [docs/results.md](docs/results.md). The system reduces, but does not eliminate, unsupported answers; its
 > confidence score is a heuristic, not a calibrated probability.
 
@@ -36,7 +37,7 @@ flowchart TD
 
 | Agent | Responsibility | Code |
 |---|---|---|
-| **Planner** | needs retrieval?; query type, keywords, focus terms, sub-questions; evidence budget; targeted re-planning on retries | `src/adaptive_rag/agents/planner.py` |
+| **Planner** | needs retrieval?; query type, keywords, focus terms, sub-questions; **routes the question** (simple → lightweight round, ≤ 1 escalation; complex/ambiguous → full workflow, ≤ 2); evidence budget; targeted re-planning on retries | `src/adaptive_rag/agents/planner.py` |
 | **Evidence** | hybrid retrieval; on escalation, MAIN-RAG-inspired filtering: dedup → LLM judge score `log P(Yes) − log P(No)` → adaptive bar `τ_q = mean − n·σ` → descending order → budget | `agents/evidence.py` |
 | **Verifier** | splits the answer into claims; lexical support (numbers must match), NLI entailment/contradiction; short answers need the answer text **and** a judge confirmation; contradictions must be corroborated | `agents/verifier.py` |
 | **Confidence** | `C = 0.25·relevance + 0.25·coverage + 0.35·verification + 0.15·consistency`; answer / retry / partial answer / abstain, with a written reason | `agents/confidence.py` |
@@ -44,6 +45,13 @@ flowchart TD
 All four agents share **one** LLM instance; every step is recorded in a real execution trace shown in the UI.
 How the design relates to **MAIN-RAG (Chang et al., ACL 2025)** — what is used exactly, what is adapted, and what is
 not claimed — is documented in [docs/main_rag_alignment.md](docs/main_rag_alignment.md).
+
+## Default configuration
+
+Question routing is **on by default** (`ARAG_QUESTION_ROUTING=true`): the Planner sends simple factual questions through
+a lightweight round with at most one escalation to the full four-agent workflow, and complex or ambiguous questions
+through the full workflow with up to two escalations. Set `ARAG_QUESTION_ROUTING=false` to run the evaluated v2
+behaviour. `ARAG_HARDWARE_PROFILE=8gb|16gb|32gb` selects laptop defaults (only `32gb` was benchmarked).
 
 ## Results (held-out test, run `20261011-122005-0a2d3c`)
 
@@ -55,7 +63,11 @@ not claimed — is documented in [docs/main_rag_alignment.md](docs/main_rag_alig
 | v2 without evidence filtering | 72.7 % | 17.6 % | 76.5 % | 9.4 s | 3.0 |
 | v1 (original pipeline) | 64.2 % | 29.1 % | 79.4 % | 10.5 s | 3.0 |
 
-165 answerable + 34 unanswerable questions. The adaptive retries carry most of the gain (v2 vs no-retry: 18 vs 0,
+Routing was evaluated in a second held-out run (`20261011-171730-9902e7`): Standard 69.1 %, v2 72.7 %, v2 + routing
+73.3 %; v2 + routing used 7.5 instead of 9.5 LLM calls and 12.1 s instead of 16.4 s on average. Neither multi-agent
+variant's gain over Standard RAG was significant in that run (p = 0.146 and 0.065). Details: [docs/results.md](docs/results.md) Part D.
+
+165 answerable + 34 unanswerable questions (first run). The adaptive retries carry most of the gain (v2 vs no-retry: 18 vs 0,
 p < 0.001); the evidence filter's contribution is small and not significant (7 vs 5, p = 0.77). Development history
 (original v1 baseline, two v2 iterations on questions 1–100) is in [docs/results.md](docs/results.md).
 

@@ -279,6 +279,16 @@ Routes chosen: 194 simple (mean 7.2 LLM calls; 114 answered in one round, 80 esc
 4. Faithfulness indicators (grounded answers, unsupported-answer rate, citation correctness) are similar across the
    three systems; the multi-agent systems mainly answer more answerable questions rather than answer more faithfully.
 
+### Decision after this experiment
+
+Question routing was made the **default** after this run because it **reduced mean latency (16.4 → 12.1 s, −26 %)
+and LLM calls (9.47 → 7.48, −21 %) without a measurable accuracy change** against v2 (1 vs 0 discordant questions).
+The accuracy improvement of the routed system over Standard RAG (73.3 % vs 69.1 %, 9 vs 2) was **not statistically
+significant** (p = 0.065). `ARAG_QUESTION_ROUTING=false` restores the evaluated v2; the benchmark variants
+`adaptive_v2` and `adaptive_routed` pin both behaviours explicitly. Run files and checksums:
+[evaluation/results/MANIFEST.md](../evaluation/results/MANIFEST.md); code tags `v2-heldout-eval`,
+`v3-routing-heldout-eval`, `results-2026-10-11`.
+
 ### Hardware profiles
 
 The `8gb` profile (qwen2.5:1.5b, no NLI) was only checked for functionality on 8 smoke-test questions (backend

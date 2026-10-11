@@ -37,3 +37,4 @@ Thumbs.db
 *.pdf
 !data/sample_documents/*.pdf
 data/datasets/triviaqa_heldout_101_300/
+!evaluation/results/MANIFEST.md

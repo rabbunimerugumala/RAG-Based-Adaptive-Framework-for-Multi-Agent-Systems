@@ -44,7 +44,8 @@ def test_planner_sets_budget_by_route(settings):
 
 
 def test_routing_off_keeps_original_behaviour(settings):
-    plan = PlannerAgent(settings, ExtractiveGenerator()).plan("Who founded Varnholm?")
+    off = settings.model_copy(update={"question_routing": False})
+    plan = PlannerAgent(off, ExtractiveGenerator()).plan("Who founded Varnholm?")
     assert plan.route == "full" and plan.retry_budget == settings.max_retries
 
 
@@ -104,7 +105,22 @@ def test_profile_does_not_override_explicit_settings(monkeypatch):
     assert s.ollama_model == "my-model" and s.nli_backend == "none"
 
 
-def test_32gb_profile_is_the_evaluated_configuration():
+def test_defaults_enable_routing_on_the_evaluated_32gb_configuration():
     s = Settings(_env_file=None)
-    assert s.hardware_profile == "32gb" and s.question_routing is False
-    assert s.ollama_model == "qwen3:4b-instruct-2507-q4_K_M" and s.doc_pool_k == 10
+    assert s.hardware_profile == "32gb" and s.question_routing is True and s.simple_route_retries == 1
+    assert s.ollama_model == "qwen3:4b-instruct-2507-q4_K_M" and s.doc_pool_k == 10 and s.max_retries == 2
+
+
+def test_routing_can_be_disabled_by_environment(monkeypatch):
+    monkeypatch.setenv("ARAG_QUESTION_ROUTING", "false")
+    assert Settings(_env_file=None).question_routing is False
+    monkeypatch.setenv("ARAG_HARDWARE_PROFILE", "8gb")  # an explicit setting also beats the profile default
+    assert Settings(_env_file=None).question_routing is False
+
+
+def test_documented_variants_are_pinned():
+    from adaptive_rag.config import LEGACY_V1
+    assert VARIANTS["adaptive_v2"][1] == {"question_routing": False}
+    assert VARIANTS["adaptive_no_retry"][1]["question_routing"] is False
+    assert VARIANTS["adaptive_no_filter"][1]["question_routing"] is False
+    assert LEGACY_V1["question_routing"] is False

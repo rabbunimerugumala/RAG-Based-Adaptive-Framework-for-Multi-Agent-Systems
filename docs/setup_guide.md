@@ -77,7 +77,7 @@ Set one variable; it only fills settings you did not set yourself.
 
 | `ARAG_HARDWARE_PROFILE` | LLM | Context | NLI verifier | Judge pool | Question routing | Status |
 |---|---|---|---|---|---|---|
-| `32gb` (default) | qwen3:4b-instruct-2507 (Q4) | 4096 | on | 10 | off | used for all reported benchmarks |
+| `32gb` (default) | qwen3:4b-instruct-2507 (Q4) | 4096 | on | 10 | on (default) | used for all reported benchmarks |
 | `16gb` | qwen3:4b-instruct-2507 (Q4) | 3072 | on | 8 | on | not separately benchmarked; estimated from the 32 GB measurements (Ollama ~3.5 GB, backend 0.6–1.0 GB) |
 | `8gb` | qwen2.5:1.5b (~1 GB download, `ollama pull qwen2.5:1.5b`) | 2048 | off (lexical + judge checks) | 6 | on | functional check only: backend ~0.3 GB, model 1.1 GB; quality not benchmarked |
 

@@ -16,7 +16,7 @@ No authentication (local prototype).
 | GET | `/api/runs?limit=20` | Recent runs (summary) |
 | GET | `/api/runs/{run_id}` | One full run including its trace |
 | GET | `/api/datasets` | Benchmark datasets with usable-question counts |
-| GET | `/api/variants` | Systems that can be evaluated: `standard`, `adaptive`, `adaptive_no_retry`, `adaptive_no_filter`, `adaptive_v1` |
+| GET | `/api/variants` | Systems that can be evaluated: `standard`, `adaptive` (current defaults), `adaptive_v2`, `adaptive_no_retry`, `adaptive_no_filter`, `adaptive_v1`, `adaptive_routed` |
 | POST | `/api/evaluations` | Start a benchmark in the background |
 | GET | `/api/evaluations` | List running and saved evaluations |
 | GET | `/api/evaluations/{id}` | Progress, per-question rows and summary |

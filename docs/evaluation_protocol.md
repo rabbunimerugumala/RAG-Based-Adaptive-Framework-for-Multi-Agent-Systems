@@ -45,7 +45,9 @@ temperature 0, seed 42), prompt, NLI model, evidence budget (top-k = 5), questio
 | Name | System | Differences from the full system |
 |---|---|---|
 | `standard` | Standard RAG baseline | single retrieval (1 query, top-5), single draft, no verification in the decision |
-| `adaptive` | **Multi-Agent RAG v2 (proposed)** | – |
+| `adaptive` | Multi-Agent RAG with the **current defaults** | in Parts C and D (before routing became the default) this name meant v2 with routing off |
+| `adaptive_v2` | Multi-Agent RAG v2, routing off | identical to `adaptive` as evaluated in Parts C and D |
+| `adaptive_routed` | v2 + question routing | `question_routing = true` (now the default) |
 | `adaptive_no_retry` | ablation | `max_retries = 0` (no additional retrieval) |
 | `adaptive_no_filter` | ablation | `doc_filter = off` (retries without judged evidence filtering) |
 | `adaptive_v1` | original pipeline | `config.LEGACY_V1`: no filtering, v1 verifier, v1 confidence |

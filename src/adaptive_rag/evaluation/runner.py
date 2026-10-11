@@ -34,15 +34,17 @@ CSV_FIELDS = ["question_id", "method", "question", "answerable", "type", "status
 # questions; only the listed settings differ. "adaptive" is the proposed v2 multi-agent system.
 VARIANTS: dict[str, tuple[str, dict]] = {
     "standard": ("standard", {}),
-    "adaptive": ("adaptive", {}),
-    "adaptive_no_retry": ("adaptive", {"max_retries": 0}),
-    "adaptive_no_filter": ("adaptive", {"doc_filter": "off"}),
+    "adaptive": ("adaptive", {}),  # current defaults = v2 + question routing
+    "adaptive_v2": ("adaptive", {"question_routing": False}),  # the v2 evaluated in Parts C and D
+    "adaptive_no_retry": ("adaptive", {"max_retries": 0, "question_routing": False}),
+    "adaptive_no_filter": ("adaptive", {"doc_filter": "off", "question_routing": False}),
     "adaptive_v1": ("adaptive", dict(LEGACY_V1)),
     "adaptive_routed": ("adaptive", {"question_routing": True}),
 }
 VARIANT_LABELS = {
     "standard": "Standard RAG (baseline)",
-    "adaptive": "Multi-Agent RAG v2 (proposed, full)",
+    "adaptive": "Multi-Agent RAG (default: v2 + question routing)",
+    "adaptive_v2": "Multi-Agent RAG v2 (routing off)",
     "adaptive_no_retry": "Multi-Agent v2 without adaptive retries",
     "adaptive_no_filter": "Multi-Agent v2 without evidence filtering",
     "adaptive_v1": "Multi-Agent v1 (original pipeline)",

@@ -282,7 +282,8 @@ def test_v2_pipeline_partial_answer_lists_unresolved_claims(settings, smoke_kb):
 
 def test_v2_pipeline_abstains_on_unanswerable(settings, smoke_kb):
     llm = ScriptedLLM([None])
-    r = make_system(settings, smoke_kb, llm, FakeNLI()).run_adaptive("Which encryption algorithm does Quillon use?")
+    v2 = settings.model_copy(update={"question_routing": False})  # evaluated v2: two escalation rounds
+    r = make_system(v2, smoke_kb, llm, FakeNLI()).run_adaptive("Which encryption algorithm does Quillon use?")
     assert r.status == "abstained" and r.support_level == "none" and r.stats.retrieval_attempts == 3
 
 

@@ -34,6 +34,7 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-6: #008300;
+  --series-7: #4a3aa7;
   --grid: #e7e9ee;
   color-scheme: light;
 }
@@ -65,6 +66,7 @@
   --series-4: #c98500;
   --series-5: #d55181;
   --series-6: #008300;
+  --series-7: #9085e9;
   --grid: #252c35;
   color-scheme: dark;
 }

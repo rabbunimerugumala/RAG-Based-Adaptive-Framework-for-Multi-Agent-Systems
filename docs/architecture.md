@@ -43,7 +43,7 @@ flowchart TD
   the Agent Trace page; filtered passages and the filter report (pool, τ_q, mean, σ, kept/removed and reasons) are
   returned with the answer.
 
-## 2b. Question routing (optional, `ARAG_QUESTION_ROUTING=true`)
+## 2b. Question routing (on by default; disable with `ARAG_QUESTION_ROUTING=false`)
 
 The Planner first analyses each question with transparent rules (no LLM call) and picks a route:
 
@@ -55,8 +55,9 @@ The Planner first analyses each question with transparent rules (no LLM call) an
 
 The route, its reason and the budget are recorded in the plan and the trace. The budget for simple questions was
 chosen on the development set, where a second escalation round turned only 1 of 76 answerable questions into a
-correct answer while 21 questions spent ~25 LLM calls each on it. Routing is off by default; the benchmark variant
-`adaptive_routed` turns it on.
+correct answer while 21 questions spent ~25 LLM calls each on it. Routing was evaluated as the variant
+`adaptive_routed` (Part D of results.md) and then made the default. `ARAG_QUESTION_ROUTING=false` restores the evaluated
+v2 behaviour (benchmark variant `adaptive_v2`).
 
 ## 3. The four agents
 
@@ -103,7 +104,7 @@ that the Planner adds a keyword-only query variant (2 search queries instead of 
 | `CONTRADICTION_CROSS_CHECK` | true | – | an NLI contradiction must not be confirmed by the judge |
 | `CONFIDENCE_MODE` | `v2` | `v1` | judge-based relevance; verified-first attempt selection |
 | `MAX_RETRIES` | 2 | 2 | additional retrieval rounds (hard cap 2) |
-| `QUESTION_ROUTING` | false | – | Planner routes simple questions to a lightweight round (§2b) |
+| `QUESTION_ROUTING` | true | false | Planner routes simple questions to a lightweight round (§2b); false = evaluated v2 |
 | `SIMPLE_ROUTE_RETRIES` | 1 | – | escalation rounds for simple questions |
 | `HARDWARE_PROFILE` | 32gb | – | `8gb` / `16gb` / `32gb` defaults (see setup guide) |
 

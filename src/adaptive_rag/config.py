@@ -81,8 +81,10 @@ class Settings(BaseSettings):
     max_retries: int = Field(2, ge=0, le=2, description="Adaptive retries; hard-capped at 2")
 
     # --- question routing (Planner): simple questions take a lightweight route ---------------------
+    # Default ON since the routing experiment (held-out run 20261011-171730-9902e7): same accuracy as v2 with ~21 % fewer
+    # LLM calls and ~26 % lower mean latency. Disable with ARAG_QUESTION_ROUTING=false to run the evaluated v2.
     question_routing: bool = Field(
-        False, description="Planner routes simple questions to a lightweight round with a smaller escalation budget")
+        True, description="Planner routes simple questions to a lightweight round with a smaller escalation budget")
     simple_route_retries: int = Field(1, ge=0, le=2, description="Escalation rounds allowed for simple questions")
     hardware_profile: Literal["8gb", "16gb", "32gb"] = "32gb"
 
@@ -164,7 +166,7 @@ class Settings(BaseSettings):
 
 
 # Switches that reproduce the original (v1) Adaptive RAG pipeline exactly - used for baseline comparisons.
-LEGACY_V1 = {"doc_filter": "off", "verifier_mode": "v1", "confidence_mode": "v1"}
+LEGACY_V1 = {"doc_filter": "off", "verifier_mode": "v1", "confidence_mode": "v1", "question_routing": False}
 
 
 @lru_cache
