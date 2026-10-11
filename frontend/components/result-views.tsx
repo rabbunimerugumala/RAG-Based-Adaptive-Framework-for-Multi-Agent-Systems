@@ -4,7 +4,7 @@
 import { CheckCircle2, ChevronDown, CircleSlash, FileText, MinusCircle, XCircle } from "lucide-react";
 import { Fragment, useState } from "react";
 import { fmt } from "@/lib/api";
-import type { ClaimLabel, ConfidenceAssessment, Evidence, QueryResponse, TraceStep, VerificationResult } from "@/lib/types";
+import type { ClaimLabel, ConfidenceAssessment, Evidence, EvidenceFilterReport, QueryResponse, TraceStep, VerificationResult } from "@/lib/types";
 import { Badge, Card, CardHeader, Meter, Notice, cn, type Tone } from "./ui";
 
 export const STATUS_META: Record<string, { label: string; tone: Tone }> = {
@@ -24,6 +24,18 @@ export const VERIFY_META: Record<string, { label: string; tone: Tone; icon: type
 };
 
 const DECISION_TONE: Record<string, Tone> = { accept: "success", retry: "accent", abstain: "warning" };
+
+const SUPPORT_META: Record<string, { label: string; tone: Tone; hint: string }> = {
+  verified: { label: "Verified answer", tone: "success", hint: "Every claim is supported by the retrieved evidence." },
+  partial: { label: "Partially supported", tone: "warning", hint: "Some claims could not be confirmed from the evidence." },
+  unverified: { label: "Unverified", tone: "danger", hint: "Accepted with weak support." },
+};
+
+export function SupportBadge({ r }: { r: QueryResponse }) {
+  if (r.method !== "adaptive" || r.status !== "answered") return <StatusBadge status={r.status} />;
+  const m = SUPPORT_META[r.support_level] ?? SUPPORT_META.unverified;
+  return <Badge tone={m.tone} title={m.hint}>{m.label}</Badge>;
+}
 
 export function StatusBadge({ status }: { status: string }) {
   const m = STATUS_META[status] ?? { label: status, tone: "neutral" as Tone };
@@ -64,8 +76,8 @@ export function AnswerCard({ r, idPrefix = "r" }: { r: QueryResponse; idPrefix?:
     <Card>
       <CardHeader
         title="Answer"
-        description={`${r.method === "adaptive" ? "Adaptive multi-agent RAG" : "Standard RAG"} · ${fmt.ms(r.stats.latency_ms)} · ${r.stats.llm_calls} LLM call(s)`}
-        action={<StatusBadge status={r.status} />}
+        description={`${r.method === "adaptive" ? "Multi-Agent RAG" : "Standard RAG (baseline)"} · ${fmt.ms(r.stats.latency_ms)} · ${r.stats.llm_calls} LLM call(s) · ${r.stats.retrieval_attempts} retrieval round(s)`}
+        action={<SupportBadge r={r} />}
       />
       <div className="space-y-4 px-5 py-4">
         {r.status === "no_documents" ? (
@@ -74,6 +86,13 @@ export function AnswerCard({ r, idPrefix = "r" }: { r: QueryResponse; idPrefix?:
           <Notice tone="warning" title="The system abstained">{r.answer}</Notice>
         ) : (
           <AnswerText text={r.answer} idPrefix={idPrefix} />
+        )}
+        {r.status === "answered" && r.support_level === "partial" && (r.unresolved_claims?.length ?? 0) > 0 && (
+          <Notice tone="warning" title="Unresolved parts (not confirmed by the evidence)">
+            <ul className="list-disc space-y-0.5 pl-4">
+              {r.unresolved_claims.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </Notice>
         )}
         {r.mode === "dev" && (
           <p className="text-xs text-warning">Development mode: answer produced by the extractive generator, not a language model.</p>
@@ -100,42 +119,76 @@ export function AnswerCard({ r, idPrefix = "r" }: { r: QueryResponse; idPrefix?:
   );
 }
 
-export function EvidenceList({ evidence, cited, idPrefix = "r" }: { evidence: Evidence[]; cited: number[]; idPrefix?: string }) {
-  const [open, setOpen] = useState<number | null>(null);
-  if (!evidence.length) return null;
+function PassageItem({ e, cited, idPrefix, filtered }: { e: Evidence; cited: boolean; idPrefix: string; filtered?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li id={filtered ? undefined : `${idPrefix}-ev-${e.ref}`} className={cn("scroll-mt-20 px-5 py-3", filtered && "opacity-80")}>
+      <button className="flex w-full items-start gap-3 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className={cn("mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-xs font-semibold",
+          filtered ? "bg-surface-2 text-subtle" : cited ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted")}>
+          {filtered ? "–" : e.ref}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <span className="font-medium text-fg">{e.filename}</span>
+            <span className="text-xs text-muted">{e.page ? `page ${e.page} · ` : ""}chunk {e.chunk_index}</span>
+            {cited && !filtered && <Badge tone="accent">cited</Badge>}
+            {e.judge_score != null && (
+              <Badge tone={e.judge_score > 0 ? "success" : "neutral"} title="Evidence-judge log-odds: relevance, not proof of truth">
+                judge {e.judge_score > 0 ? "+" : ""}{e.judge_score.toFixed(1)}
+              </Badge>
+            )}
+            {filtered && <Badge tone="warning">filtered out</Badge>}
+          </span>
+          {filtered && e.filter_reason && <span className="mt-0.5 block text-xs text-warning">{e.filter_reason}</span>}
+          <span className={cn("mt-1 block text-sm text-muted", !open && "line-clamp-2")}>{e.text}</span>
+        </span>
+        <ChevronDown className={cn("mt-1 size-4 shrink-0 text-subtle transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <dl className="ml-9 mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-6">
+          {[["Retrieval rank", e.retrieval_rank ?? "–"], ["RRF", fmt.num(e.rrf_score, 4)], ["Dense cosine", fmt.num(e.dense_score, 3)],
+            ["BM25", fmt.num(e.bm25_score, 2)], ["Judge log-odds", e.judge_score == null ? "off" : fmt.num(e.judge_score, 2)],
+            ["Keyword overlap", fmt.pct(e.keyword_overlap)]].map(([k, v]) => (
+            <div key={String(k)}><dt className="text-subtle">{k}</dt><dd className="font-medium tabular-nums text-fg">{v}</dd></div>
+          ))}
+          {e.candidate_answer && (
+            <div className="col-span-full"><dt className="text-subtle">Per-passage predictor answer</dt><dd className="text-fg">{e.candidate_answer}</dd></div>
+          )}
+        </dl>
+      )}
+    </li>
+  );
+}
+
+export function EvidenceList({ evidence, cited, idPrefix = "r", filtered = [], report = null }: {
+  evidence: Evidence[]; cited: number[]; idPrefix?: string; filtered?: Evidence[]; report?: EvidenceFilterReport | null;
+}) {
+  const [showFiltered, setShowFiltered] = useState(false);
+  if (!evidence.length && !filtered.length) return null;
+  const description = report
+    ? `Evidence Agent judged ${report.pool_size} retrieved passage(s) and kept ${report.retained} at or above the adaptive bar τq${report.threshold != null ? ` = ${report.threshold.toFixed(2)}` : ""} (mean − ${report.n_sigma}·σ), ordered by judge score.`
+    : "Hybrid dense + BM25 retrieval fused with RRF (no evidence filtering).";
   return (
     <Card>
-      <CardHeader title="Retrieved evidence" description="Hybrid dense + BM25 retrieval, fused with RRF. Scores measure relevance to the query, not truth." />
+      <CardHeader title="Evidence explorer" description={description} />
+      {report?.fallback && <div className="px-5 pt-3"><Notice tone="warning">{report.fallback}</Notice></div>}
+      <p className="px-5 pt-3 text-xs text-subtle">Retrieval and judge scores measure relevance to the question. Factual support is checked separately by the Verifier Agent.</p>
       <ul className="divide-y divide-border">
-        {evidence.map((e) => {
-          const isOpen = open === e.ref;
-          return (
-            <li key={e.chunk_id} id={`${idPrefix}-ev-${e.ref}`} className="scroll-mt-20 px-5 py-3">
-              <button className="flex w-full items-start gap-3 text-left" onClick={() => setOpen(isOpen ? null : e.ref)} aria-expanded={isOpen}>
-                <span className={cn("mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-xs font-semibold",
-                  cited.includes(e.ref) ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted")}>{e.ref}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                    <span className="font-medium text-fg">{e.filename}</span>
-                    <span className="text-xs text-muted">{e.page ? `page ${e.page} · ` : ""}chunk {e.chunk_index}</span>
-                    {cited.includes(e.ref) && <Badge tone="accent">cited</Badge>}
-                  </span>
-                  <span className={cn("mt-1 block text-sm text-muted", !isOpen && "line-clamp-2")}>{e.text}</span>
-                </span>
-                <ChevronDown className={cn("mt-1 size-4 shrink-0 text-subtle transition-transform", isOpen && "rotate-180")} aria-hidden />
-              </button>
-              {isOpen && (
-                <dl className="ml-9 mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-5">
-                  {[["RRF", fmt.num(e.rrf_score, 4)], ["Dense cosine", fmt.num(e.dense_score, 3)], ["BM25", fmt.num(e.bm25_score, 2)],
-                    ["Rerank", e.rerank_score == null ? "off" : fmt.num(e.rerank_score, 2)], ["Keyword overlap", fmt.pct(e.keyword_overlap)]].map(([k, v]) => (
-                    <div key={k}><dt className="text-subtle">{k}</dt><dd className="font-medium tabular-nums text-fg">{v}</dd></div>
-                  ))}
-                </dl>
-              )}
-            </li>
-          );
-        })}
+        {evidence.map((e) => <PassageItem key={e.chunk_id} e={e} cited={cited.includes(e.ref)} idPrefix={idPrefix} />)}
       </ul>
+      {filtered.length > 0 && (
+        <div className="border-t border-border">
+          <button onClick={() => setShowFiltered(!showFiltered)} className="w-full px-5 py-3 text-left text-sm font-medium text-accent hover:underline" aria-expanded={showFiltered}>
+            {showFiltered ? "Hide" : "Show"} {filtered.length} filtered-out passage(s)
+          </button>
+          {showFiltered && (
+            <ul className="divide-y divide-border">
+              {filtered.map((e) => <PassageItem key={e.chunk_id} e={e} cited={false} idPrefix={idPrefix} filtered />)}
+            </ul>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

@@ -104,3 +104,23 @@ def test_evaluation_lifecycle_and_export(client):
     assert client.get(f"/api/evaluations/{job['job_id']}/export?format=xml").status_code == 422
     assert any(j["job_id"] == job["job_id"] for j in client.get("/api/evaluations").json())
     assert client.get("/api/evaluations/..evil").status_code == 400
+
+
+def test_ready_and_variants_endpoints(client):
+    assert client.get("/api/ready").json()["ready"] is True
+    names = [v["name"] for v in client.get("/api/variants").json()]
+    assert names[:2] == ["standard", "adaptive"] and "adaptive_v1" in names
+
+
+def test_query_response_exposes_multiagent_fields(client):
+    upload(client, "quillon.txt", DOC)
+    r = client.post("/api/query", json={"question": "Which TCP port do Quillon servers listen on?"}).json()
+    assert r["method"] == "adaptive"  # Multi-Agent RAG is the default method
+    assert r["support_level"] in ("verified", "partial", "unverified", "none")
+    assert r["evidence_filter"]["mode"] == "pair" and "filtered_evidence" in r
+    assert all(e["judge_score"] is not None for e in r["evidence"])
+
+
+def test_evaluation_rejects_unknown_variant(client):
+    res = client.post("/api/evaluations", json={"dataset": "smoke_test", "methods": ["standard", "magic"]})
+    assert res.status_code == 422

@@ -4,7 +4,7 @@ import { Download, Play, Square } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, CardHeader, EmptyState, Notice, PageHeader, Spinner, Stat, cn } from "@/components/ui";
 import { api, ApiError, fmt } from "@/lib/api";
-import type { DatasetInfo, EvalJob, EvalRow, Method } from "@/lib/types";
+import type { DatasetInfo, EvalJob, EvalRow, Variant } from "@/lib/types";
 import { MetricsChart } from "./metrics-chart";
 
 const TABLE_METRICS: [string, string, "pct" | "num" | "ms"][] = [
@@ -21,7 +21,15 @@ const TABLE_METRICS: [string, string, "pct" | "num" | "ms"][] = [
   ["mean_latency_ms", "Mean latency", "ms"],
   ["median_latency_ms", "Median latency", "ms"],
   ["mean_llm_calls", "Mean LLM calls", "num"],
-  ["mean_retrieval_attempts", "Mean retrieval attempts", "num"],
+  ["mean_retrieval_attempts", "Mean retrieval rounds", "num"],
+  ["abstention_rate", "Abstention rate (all questions)", "pct"],
+  ["unsupported_answer_rate", "Unsupported-answer rate (answered but not correct)", "pct"],
+  ["evidence_precision", "Evidence precision (passages containing the answer)", "pct"],
+  ["grounded_rate", "Grounded answers (lexical, verifier-independent)", "pct"],
+  ["verified_rate", "Answers marked verified (own verifier)", "pct"],
+  ["mean_passages_used", "Passages given to the generator", "num"],
+  ["cold_latency_ms", "Cold-start latency (first question)", "ms"],
+  ["warm_mean_latency_ms", "Warm mean latency", "ms"],
   ["n_errors", "Failed cases", "num"],
 ];
 
@@ -42,7 +50,8 @@ export default function EvaluationPage() {
   const [jobs, setJobs] = useState<EvalJob[]>([]);
   const [dataset, setDataset] = useState("");
   const [limit, setLimit] = useState("");
-  const [methods, setMethods] = useState<Method[]>(["standard", "adaptive"]);
+  const [methods, setMethods] = useState<string[]>(["standard", "adaptive"]);
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [job, setJob] = useState<EvalJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -54,6 +63,7 @@ export default function EvaluationPage() {
       setDatasets(d);
       setDataset((cur) => cur || d.find((x) => x.valid)?.name || "");
     }).catch((e: Error) => { setDatasets([]); setError(e.message); });
+    api.variants().then(setVariants).catch(() => setVariants([]));
     loadJobs();
   }, [loadJobs]);
 
@@ -123,15 +133,20 @@ export default function EvaluationPage() {
             </div>
             <fieldset>
               <legend className="text-sm font-medium text-fg">Methods</legend>
-              <div className="mt-2 flex gap-4 text-sm">
-                {(["standard", "adaptive"] as Method[]).map((m) => (
-                  <label key={m} className="flex items-center gap-2 text-fg">
-                    <input type="checkbox" className="accent-[var(--accent)]" checked={methods.includes(m)}
-                      onChange={(e) => setMethods((cur) => e.target.checked ? [...cur, m].sort() as Method[] : cur.filter((x) => x !== m))} />
-                    {m === "standard" ? "Standard" : "Adaptive"}
+              <div className="mt-2 space-y-1.5 text-sm">
+                {(variants.length ? variants : [{ name: "standard", label: "Standard RAG (baseline)" }, { name: "adaptive", label: "Multi-Agent RAG (proposed)" }] as Variant[]).map((v) => (
+                  <label key={v.name} className="flex items-center gap-2 text-fg">
+                    <input type="checkbox" className="accent-[var(--accent)]" checked={methods.includes(v.name)}
+                      onChange={(e) => setMethods((cur) => {
+                        const order = (variants.length ? variants.map((x) => x.name) : ["standard", "adaptive"]);
+                        const next = e.target.checked ? [...cur, v.name] : cur.filter((x) => x !== v.name);
+                        return order.filter((n) => next.includes(n));
+                      })} />
+                    {v.label}
                   </label>
                 ))}
               </div>
+              <p className="mt-1 text-xs text-subtle">Extra variants are ablations: each one switches off a single component of the proposed system.</p>
             </fieldset>
             <Button variant="primary" className="w-full" onClick={start} loading={starting} disabled={!dataset || !methods.length || running}>
               {!starting && <Play className="size-4" />} Run evaluation
@@ -207,12 +222,17 @@ export default function EvaluationPage() {
               <div className="overflow-x-auto border-t border-border px-5 py-3">
                 <table className="w-full min-w-[440px] text-sm">
                   <thead className="text-xs text-subtle"><tr><th className="py-2 text-left font-medium">Metric</th>
-                    {res.methods.map((m) => <th key={m} className="py-2 text-right font-medium capitalize">{m}</th>)}</tr></thead>
+                    {res.methods.map((m) => <th key={m} className="py-2 pl-3 text-right font-medium">{res.method_labels?.[m] ?? m}</th>)}</tr></thead>
                   <tbody className="divide-y divide-border">
                     {TABLE_METRICS.map(([key, label, kind]) => (
                       <tr key={key}><td className="py-2 text-muted">{label}</td>
-                        {res.methods.map((m) => <td key={m} className="py-2 text-right tabular-nums text-fg">{show(res.summary[m]?.[key], kind)}</td>)}</tr>
+                        {res.methods.map((m) => <td key={m} className="py-2 pl-3 text-right tabular-nums text-fg">{show(res.summary[m]?.[key], kind)}</td>)}</tr>
                     ))}
+                    {res.consistency && Object.keys(res.consistency).length > 0 && (
+                      <tr><td className="py-2 text-muted">Response consistency (repeat runs: same answer)</td>
+                        {res.methods.map((m) => <td key={m} className="py-2 pl-3 text-right tabular-nums text-fg">
+                          {res.consistency?.[m] ? `${show(res.consistency[m].same_answer, "pct")} (n=${res.consistency[m].n})` : "n/a"}</td>)}</tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -234,7 +254,7 @@ export default function EvaluationPage() {
                         <td className="px-5 py-2"><span className="text-fg">{r.question}</span>
                           <span className="mt-0.5 block text-xs text-subtle">{r.answerable ? `gold: ${r.gold_answers.slice(0, 3).join(" | ")}` : "unanswerable"}</span>
                           {r.error && <span className="block text-xs text-danger">{r.error}</span>}</td>
-                        <td className="px-3 py-2 capitalize text-muted">{r.method}</td>
+                        <td className="px-3 py-2 text-muted">{res?.method_labels?.[r.method] ?? r.method}</td>
                         <td className="px-3 py-2"><Outcome r={r} /></td>
                         <td className="px-3 py-2 text-right tabular-nums text-muted">{r.retrieval_attempts}</td>
                         <td className="px-5 py-2 text-right tabular-nums text-muted">{fmt.ms(r.latency_ms)}</td>

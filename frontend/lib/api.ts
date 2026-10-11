@@ -9,6 +9,7 @@ import type {
   QueryResponse,
   RunSummary,
   UploadResult,
+  Variant,
 } from "./types";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -74,7 +75,8 @@ export const api = {
   datasets: () => request<DatasetInfo[]>("/api/datasets", {}, 60_000),
   evaluations: () => request<EvalJob[]>("/api/evaluations"),
   evaluation: (id: string) => request<EvalJob>(`/api/evaluations/${encodeURIComponent(id)}`),
-  startEvaluation: (dataset: string, methods: Method[], limit: number | null) =>
+  variants: () => request<Variant[]>("/api/variants"),
+  startEvaluation: (dataset: string, methods: string[], limit: number | null) =>
     request<EvalJob>("/api/evaluations", json({ dataset, methods, limit }), 60_000),
   cancelEvaluation: (id: string) => request<unknown>(`/api/evaluations/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   exportUrl: (id: string, format: "csv" | "json") => `${API_URL}/api/evaluations/${encodeURIComponent(id)}/export?format=${format}`,

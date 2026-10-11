@@ -13,7 +13,7 @@ const NAV = [
   { href: "/ask", label: "Ask Documents", icon: MessageSquareText },
   { href: "/trace", label: "Agent Trace", icon: Network },
   { href: "/documents", label: "Document Library", icon: FileText },
-  { href: "/compare", label: "Compare RAG", icon: GitCompareArrows },
+  { href: "/compare", label: "Compare vs Baseline", icon: GitCompareArrows },
   { href: "/evaluation", label: "Evaluation", icon: BarChart3 },
 ];
 
@@ -88,7 +88,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <Link href="/" className="block">
-      <p className="text-sm font-semibold leading-tight text-fg">Adaptive Multi-Agent RAG</p>
+      <p className="text-sm font-semibold leading-tight text-fg">Multi-Agent RAG</p>
       <p className="text-xs text-muted">Research prototype</p>
     </Link>
   );

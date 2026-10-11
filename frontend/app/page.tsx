@@ -10,11 +10,13 @@ import { api, fmt } from "@/lib/api";
 import type { RunSummary } from "@/lib/types";
 
 const AGENTS = [
-  ["Planner", "Classifies the question, extracts keywords and focus terms, splits multi-part questions and sets retrieval parameters."],
-  ["Evidence", "Runs every planned query with dense (Qdrant) + BM25 search and fuses rankings with reciprocal-rank fusion."],
-  ["Verifier", "Splits the draft answer into claims and checks each against the evidence (lexical + local NLI model)."],
-  ["Confidence", "Combines relevance, coverage, verification and citation consistency into a heuristic score: accept, retry or abstain."],
+  ["Planner", "Analyses the question (type, keywords, focus terms, sub-questions), decides whether retrieval is needed and sets the evidence budget; re-plans targeted searches on a retry."],
+  ["Evidence", "Hybrid dense + BM25 retrieval, then MAIN-RAG-inspired filtering: removes near-duplicates, scores every passage with the shared LLM as a judge (log P(Yes) − log P(No)), keeps those above the per-question adaptive bar and ranks them."],
+  ["Verifier", "Splits the draft answer into claims and checks each against the kept evidence with lexical checks and a local NLI model; short answers need the answer text in a passage and the judge's confirmation."],
+  ["Confidence", "Combines judge-based evidence relevance, coverage, verification and citation consistency into a heuristic score, then answers, retrieves again (max 2) or abstains."],
 ];
+
+const WORKFLOW = ["Question", "Planner", "Hybrid retrieval", "Evidence judge + filter", "Draft answer", "Verifier", "Confidence"];
 
 export default function OverviewPage() {
   const { health, error, loading } = useHealth();
@@ -28,8 +30,27 @@ export default function OverviewPage() {
     <>
       <PageHeader
         title="RAG-Based Adaptive Framework for Multi-Agent Systems"
-        description="A research prototype comparing Standard Retrieval-Augmented Generation with an adaptive pipeline of four agents (Planner, Evidence, Verifier, Confidence) that verifies answers against retrieved documents and retries retrieval or abstains when support is weak."
+        description="An adaptive Multi-Agent RAG system: four cooperating agents (Planner, Evidence, Verifier, Confidence) filter the retrieved evidence, verify every claim against it, and answer, retrieve again or abstain. Standard RAG is kept as the comparison baseline."
       />
+
+      <Card className="mb-6 p-5">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-subtle">Proposed system: Multi-Agent RAG workflow</p>
+        <ol className="flex flex-wrap items-center gap-2 text-sm" aria-label="Multi-Agent RAG workflow">
+          {WORKFLOW.map((step, i) => (
+            <li key={step} className="flex items-center gap-2">
+              <span className={i === 0 ? "rounded-md bg-surface-2 px-2.5 py-1 text-muted" : "rounded-md bg-accent-soft px-2.5 py-1 font-medium text-accent"}>{step}</span>
+              {i < WORKFLOW.length - 1 && <ArrowRight className="size-3.5 text-subtle" aria-hidden />}
+            </li>
+          ))}
+          <li className="flex items-center gap-2">
+            <ArrowRight className="size-3.5 text-subtle" aria-hidden />
+            <span className="flex flex-wrap gap-1.5">
+              <Badge tone="success">verified answer</Badge><Badge tone="warning">partially supported</Badge>
+              <Badge tone="accent">retrieve again (≤ 2)</Badge><Badge tone="neutral">abstain</Badge>
+            </span>
+          </li>
+        </ol>
+      </Card>
 
       {error && !health && (
         <Notice tone="danger" title="Backend not reachable" className="mb-6">

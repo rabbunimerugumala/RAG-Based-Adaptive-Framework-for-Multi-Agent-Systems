@@ -44,7 +44,7 @@ export default function ComparePage() {
 
   return (
     <>
-      <PageHeader title="Compare RAG" description="Run Standard RAG and Adaptive RAG on the same question, knowledge base, retriever, generator and default top-k. All numbers below are measured for this single run." />
+      <PageHeader title="Compare RAG" description="Run the proposed Multi-Agent RAG and the Standard RAG baseline on the same question, knowledge base, retriever, generator and evidence budget. All numbers are measured for this single run." />
       <Card className="p-4 sm:p-5">
         <form onSubmit={run} className="flex flex-col gap-3 sm:flex-row">
           <label htmlFor="cq" className="sr-only">Question</label>
@@ -70,7 +70,7 @@ export default function ComparePage() {
             <div className="overflow-x-auto px-5 py-2">
               <table className="w-full min-w-[480px] text-sm">
                 <thead className="text-xs text-subtle">
-                  <tr><th className="py-2 text-left font-medium">Measure</th><th className="py-2 text-left font-medium">Standard RAG</th><th className="py-2 text-left font-medium">Adaptive RAG</th></tr>
+                  <tr><th className="py-2 text-left font-medium">Measure</th><th className="py-2 text-left font-medium">Standard RAG (baseline)</th><th className="py-2 text-left font-medium">Multi-Agent RAG</th></tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   <Row label="Outcome" std={res.standard.status} ada={res.adaptive.status} />
@@ -95,7 +95,7 @@ export default function ComparePage() {
               return (
                 <div key={m} className="min-w-0 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="font-semibold text-fg">{m === "standard" ? "Standard RAG" : "Adaptive RAG"}</h2>
+                    <h2 className="font-semibold text-fg">{m === "standard" ? "Standard RAG (baseline)" : "Multi-Agent RAG (proposed)"}</h2>
                     <Link href={`/trace?run=${r.run_id}`} className="text-sm text-accent hover:underline">Trace</Link>
                   </div>
                   <AnswerCard r={r} idPrefix={m} />
@@ -104,7 +104,7 @@ export default function ComparePage() {
                       {r.trace.filter((t) => t.step === "confidence" && t.decision === "retry").map((t, i) => <span key={i} className="block">Attempt {t.attempt + 1}: {t.note}</span>)}
                     </Notice>
                   )}
-                  <EvidenceList evidence={r.evidence} cited={r.citations.map((c) => c.ref)} idPrefix={m} />
+                  <EvidenceList evidence={r.evidence} cited={r.citations.map((c) => c.ref)} idPrefix={m} filtered={r.filtered_evidence ?? []} report={r.evidence_filter} />
                 </div>
               );
             })}

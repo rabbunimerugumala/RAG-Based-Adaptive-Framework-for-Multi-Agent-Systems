@@ -217,6 +217,14 @@ def create_app(settings: Settings | None = None, models: ModelBundle | None = No
             "config": settings.public_dict(),
         }
 
+    @app.get("/api/ready", tags=["system"], summary="Readiness: 200 when the generator can answer, else 503")
+    def ready(request: Request):
+        gen = st(request).models.generator
+        status = gen.status() if hasattr(gen, "status") else {"ready": True, "detail": "dev generator"}
+        if not status["ready"]:
+            raise HTTPException(503, f"Generator not ready: {status['detail']}")
+        return {"ready": True, "generator": gen.name}
+
     # ------------------------------------------------------------------ documents
     @app.get("/api/documents", tags=["documents"], response_model=list[DocumentInfo])
     def list_documents(request: Request):

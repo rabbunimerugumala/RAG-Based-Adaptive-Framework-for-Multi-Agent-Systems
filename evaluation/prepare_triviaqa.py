@@ -16,7 +16,7 @@ documents act as distractors.
 Usage (PowerShell, from the project root):
     pip install -e ".[datasets]"
     python evaluation/prepare_triviaqa.py --n 100
-    python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300
+    python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300         --exclude-dataset data/datasets/triviaqa_unfiltered_sample
 """
 
 from __future__ import annotations
@@ -38,6 +38,8 @@ def main() -> None:
     ap.add_argument("--offset", type=int, default=0,
                     help="skip this many questions first (e.g. 100 for a held-out set disjoint from the first 100)")
     ap.add_argument("--split", default="validation", choices=["train", "validation"])
+    ap.add_argument("--exclude-dataset", type=Path, default=None,
+                    help="drop selected questions whose id also occurs in this prepared dataset (keeps test sets disjoint)")
     ap.add_argument("--wiki-chars", type=int, default=6000)
     ap.add_argument("--web-chars", type=int, default=3000)
     ap.add_argument("--web-docs", type=int, default=3)
@@ -81,6 +83,12 @@ def main() -> None:
         print(f"\r{len(questions)}/{args.n} questions, {len(corpus)} documents", end="", flush=True)
     print()
 
+    removed: list[str] = []
+    if args.exclude_dataset:
+        other = {json.loads(line)["id"] for line in (args.exclude_dataset / "questions.jsonl").open(encoding="utf-8")}
+        removed = [q["id"] for q in questions if q["id"] in other]
+        questions = [q for q in questions if q["id"] not in other]
+        print(f"Removed {len(removed)} question(s) shared with {args.exclude_dataset.name}: {removed}")
     args.out.mkdir(parents=True, exist_ok=True)
     n_ans = sum(q["answerable"] for q in questions)
     manifest = {
@@ -94,7 +102,9 @@ def main() -> None:
         "citation": "Joshi et al. TriviaQA: A Large Scale Distantly Supervised Challenge Dataset for Reading Comprehension. ACL 2017.",
         "license": "Repository states Apache-2.0; evidence documents are third-party content. Local research use only - not redistributed.",
         "synthetic": False,
-        "preparation": vars(args) | {"out": str(args.out.relative_to(ROOT))},
+        "preparation": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
+        | {"out": str(args.out.relative_to(ROOT))},
+        "removed_overlap_with_dev_set": removed,
     }
     (args.out / "dataset.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     for name, rows in (("corpus.jsonl", corpus), ("questions.jsonl", questions)):

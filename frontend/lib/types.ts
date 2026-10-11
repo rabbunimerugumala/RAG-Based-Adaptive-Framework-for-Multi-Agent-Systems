@@ -36,6 +36,25 @@ export interface Evidence {
   rerank_score: number | null;
   keyword_overlap: number;
   matched_queries: string[];
+  retrieval_rank: number | null;
+  /** Evidence Agent judge score: log P(Yes) - log P(No). Relevance, not proof of truth. */
+  judge_score: number | null;
+  candidate_answer: string | null;
+  filter_reason: string | null;
+}
+
+export interface EvidenceFilterReport {
+  mode: string;
+  pool_size: number;
+  duplicates_removed: number;
+  threshold: number | null;
+  mean: number | null;
+  std: number | null;
+  n_sigma: number;
+  retained: number;
+  filtered: number;
+  fallback: string | null;
+  judge_calls: number;
 }
 
 export type ClaimLabel = "supported" | "partially_supported" | "unsupported" | "contradicted";
@@ -60,6 +79,7 @@ export interface VerificationResult {
   contradicted_claims: string[];
   method: string;
   summary: string;
+  llm_calls?: number;
 }
 
 export interface ConfidenceAssessment {
@@ -117,6 +137,10 @@ export interface QueryResponse {
   verification: VerificationResult | null;
   verification_used_in_decision: boolean;
   confidence: ConfidenceAssessment | null;
+  support_level: "verified" | "partial" | "unverified" | "none";
+  unresolved_claims: string[];
+  filtered_evidence: Evidence[];
+  evidence_filter: EvidenceFilterReport | null;
   trace: TraceStep[];
   stats: RunStats;
   mode: string;
@@ -179,9 +203,16 @@ export interface DatasetInfo {
   issues: string[];
 }
 
+export interface Variant {
+  name: string;
+  label: string;
+  pipeline: Method;
+  settings: Record<string, unknown>;
+}
+
 export interface EvalRow {
   question_id: string;
-  method: Method;
+  method: string;
   question: string;
   answerable: boolean;
   type: string;
@@ -194,6 +225,11 @@ export interface EvalRow {
   evidence_has_answer: boolean | null;
   verification: string | null;
   support_score: number | null;
+  support_level?: string;
+  evidence_precision?: number | null;
+  grounded?: boolean | null;
+  passages_used?: number;
+  passages_filtered?: number;
   confidence: number | null;
   latency_ms: number;
   llm_calls: number;
@@ -210,7 +246,10 @@ export type MetricSummary = Record<string, number | null>;
 export interface EvalResult {
   run_id: string;
   dataset: DatasetInfo & { num_questions_available: number };
-  methods: Method[];
+  methods: string[];
+  method_labels?: Record<string, string>;
+  consistency?: Record<string, { n: number; same_status: number | null; same_answer: number | null }>;
+  software?: { adaptive_rag: string; git_commit: string | null };
   sample: { limit: number | null; seed: number; num_questions: number; question_ids: string[] };
   mode: string;
   dev_mode_warning: string | null;
@@ -225,7 +264,7 @@ export interface EvalResult {
 export interface EvalJob {
   job_id: string;
   dataset: string;
-  methods: Method[];
+  methods: string[];
   limit: number | null;
   status: "running" | "completed" | "failed" | "cancelled";
   done: number;

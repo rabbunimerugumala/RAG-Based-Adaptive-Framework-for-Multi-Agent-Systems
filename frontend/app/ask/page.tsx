@@ -50,7 +50,7 @@ export default function AskPage() {
 
   return (
     <>
-      <PageHeader title="Ask Documents" description="Ask a question about the documents in your knowledge base. Every answer is grounded in retrieved passages and shows its citations." />
+      <PageHeader title="Ask Documents" description="Ask a question about your documents. The four-agent Multi-Agent RAG plans the search, filters the evidence, verifies every claim, and then answers, retrieves again or abstains. Standard RAG is available as the comparison baseline." />
 
       {emptyKb && (
         <Notice tone="accent" title="Your knowledge base is empty" className="mb-4">
@@ -73,7 +73,7 @@ export default function AskPage() {
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SegmentedControl label="RAG method" value={method} onChange={setMethod}
-              options={[{ value: "adaptive", label: "Adaptive RAG" }, { value: "standard", label: "Standard RAG" }]} />
+              options={[{ value: "adaptive", label: "Multi-Agent RAG" }, { value: "standard", label: "Standard RAG (baseline)" }]} />
             <div className="flex items-center gap-2">
               <span className="hidden text-xs text-subtle sm:inline">Ctrl + Enter</span>
               {loading && (
@@ -89,7 +89,7 @@ export default function AskPage() {
         </form>
         {loading && (
           <p className="mt-3 text-xs text-muted">
-            <Spinner label={method === "adaptive" ? "Planner → Evidence → Draft → Verifier → Confidence (may retry up to twice)…" : "Retrieving and generating…"} />
+            <Spinner label={method === "adaptive" ? "Planner → Evidence (retrieve, judge, filter) → Draft → Verifier → Confidence; may retrieve again up to twice…" : "Retrieving and generating (baseline)…"} />
           </p>
         )}
         {loading && <p className="mt-1 text-xs text-subtle">Cancel stops waiting in the browser; a run already started on the backend still finishes and is saved.</p>}
@@ -112,7 +112,7 @@ export default function AskPage() {
             {result.confidence && <ConfidenceCard c={result.confidence} />}
             {result.verification && <VerificationCard v={result.verification} usedInDecision={result.verification_used_in_decision} />}
           </div>
-          <EvidenceList evidence={result.evidence} cited={result.citations.map((c) => c.ref)} />
+          <EvidenceList evidence={result.evidence} cited={result.citations.map((c) => c.ref)} filtered={result.filtered_evidence ?? []} report={result.evidence_filter} />
         </div>
       )}
     </>

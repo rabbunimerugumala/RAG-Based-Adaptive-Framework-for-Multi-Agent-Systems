@@ -13,12 +13,17 @@ export const CHART_METRICS: [string, string][] = [
   ["evidence_recall", "Evidence recall"],
 ];
 
+// Colour follows the system (fixed order), never its rank. Palette validated with the dataviz checker.
 const SERIES: Record<string, { label: string; color: string }> = {
   standard: { label: "Standard RAG", color: "var(--series-1)" },
-  adaptive: { label: "Adaptive RAG", color: "var(--series-2)" },
+  adaptive: { label: "Multi-Agent RAG (full)", color: "var(--series-2)" },
+  adaptive_no_retry: { label: "Multi-Agent, no retries", color: "var(--series-3)" },
+  adaptive_no_filter: { label: "Multi-Agent, no filtering", color: "var(--series-4)" },
+  adaptive_v1: { label: "Multi-Agent v1 (original)", color: "var(--series-5)" },
 };
 
 export function MetricsChart({ summary, methods }: { summary: Record<string, MetricSummary>; methods: string[] }) {
+  const labelSize = methods.length > 3 ? 8 : 10;
   const data = CHART_METRICS.map(([key, label]) => {
     const row: Record<string, string | number | null> = { metric: label };
     methods.forEach((m) => { row[m] = summary[m]?.[key] ?? null; });
@@ -43,7 +48,7 @@ export function MetricsChart({ summary, methods }: { summary: Record<string, Met
           <Legend formatter={(v) => <span style={{ color: "var(--muted)", fontSize: 12 }}>{SERIES[v]?.label ?? v}</span>} />
           {methods.map((m) => (
             <Bar key={m} dataKey={m} fill={SERIES[m]?.color} radius={[4, 4, 0, 0]} maxBarSize={36} stroke="var(--surface)" strokeWidth={1}>
-              <LabelList dataKey={m} position="top" formatter={pct} style={{ fill: "var(--muted)", fontSize: 10 }} />
+              <LabelList dataKey={m} position="top" formatter={pct} style={{ fill: "var(--muted)", fontSize: labelSize }} />
             </Bar>
           ))}
         </BarChart>
