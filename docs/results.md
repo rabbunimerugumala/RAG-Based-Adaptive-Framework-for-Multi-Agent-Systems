@@ -163,3 +163,72 @@ Part A run `20261010-223619-6d2293` (same questions, model, settings; Standard R
   first-round filtering kept only 2–4 of 10 passages and sometimes removed the answer passage; ~14 LLM calls/question.
 * **Iteration 2** (filtering only on escalation, NLI contradictions must be corroborated by the judge): the version
   frozen at commit `808ef33` for Part C. No thresholds or weights were changed in either iteration.
+
+---
+
+# Part C — Held-out test of the frozen v2 (TriviaQA questions 101–300)
+
+Run `20261011-122005-0a2d3c` · 2026-10-11 · 199 questions (165 answerable, 34 unanswerable given the evidence) ·
+978 pooled documents · 5 systems × 199 questions, interleaved per question · 0 failed cases · runtime 2 h 44 min.
+Code: frozen commit `808ef33` (the results file records `a703ed7` because the commit was read when the file was saved;
+the commits in between changed only documentation, UI and a trace-note string, not decision logic — the runner now
+records the commit at start). Same model, embedder, NLI model, corpus, prompt and top-k for every system.
+Reproduce: see [evaluation_protocol.md](evaluation_protocol.md) §4.
+
+| Metric | Standard RAG | **Multi-Agent v2 (full)** | v2 without retries | v2 without filtering | v1 (original) |
+|---|---|---|---|---|---|
+| **Accuracy** (of 165 answerable) | 67.9 % (112) | **73.9 % (122)** | 63.0 % (104) | 72.7 % (120) | 64.2 % (106) |
+| Exact match | 32.7 % | 37.6 % | 32.7 % | 37.0 % | 31.5 % |
+| Token F1 | 0.469 | 0.520 | 0.444 | 0.504 | 0.437 |
+| **Wrong abstention** (answerable) | 19.4 % (32) | **13.9 % (23)** | 27.3 % (45) | 17.6 % (29) | 29.1 % (48) |
+| **Correct abstention** (of 34 unanswerable) | 79.4 % (27) | 79.4 % (27) | 82.4 % (28) | 76.5 % (26) | 79.4 % (27) |
+| Abstention rate (all) | 29.6 % | 25.1 % | 36.7 % | 27.6 % | 37.7 % |
+| Selective accuracy (answered) | 84.2 % | 85.9 % | 86.7 % | 88.2 % | 90.6 % |
+| Unsupported-answer rate (answered) | 20.0 % | 18.1 % | 17.5 % | 16.7 % | 14.5 % |
+| Citation correctness (cites a gold doc) | 94.7 % | 95.1 % | 95.8 % | 96.3 % | 96.6 % |
+| Evidence precision / recall | 54.8 % / 92.1 % | 58.9 % / 95.2 % | 53.8 % / 92.1 % | 53.5 % / 95.8 % | 52.9 % / 96.4 % |
+| Grounded answers (lexical) | 82.1 % | 85.2 % | 86.5 % | 86.1 % | 83.9 % |
+| Response consistency (20 repeats, same answer) | 85 % | 100 % | 100 % | 85 % | 90 % |
+| Mean / median latency | 3.6 / 3.3 s | 15.2 / 6.8 s | 3.9 / 3.2 s | 9.4 / 6.6 s | 10.5 / 10.5 s |
+| Mean LLM calls | 1.00 | 9.27 | 1.31 | 3.00 | 2.97 |
+| Mean retrieval rounds | 1.00 | 1.71 | 1.00 | 1.75 | 1.98 |
+
+### Paired significance (exact two-sided McNemar on the 165 answerable questions)
+
+| Comparison | Only first correct | Only second correct | p |
+|---|---|---|---|
+| Standard vs **Multi-Agent v2** | 3 | **13** | **0.021** |
+| Standard vs v2 without filtering | 5 | 13 | 0.096 |
+| Standard vs v2 without retries | 12 | 4 | 0.077 |
+| Standard vs v1 | 20 | 14 | 0.39 |
+| v2 vs v2 without retries | 18 | 0 | < 0.001 |
+| v2 vs v2 without filtering | 7 | 5 | 0.77 |
+| v2 vs v1 | 23 | 7 | 0.005 |
+
+Abstention on the 34 unanswerable questions: Standard and v2 differ on only 2 questions (1 : 1, p = 1.0).
+
+### Findings (measured)
+
+1. **Multi-Agent RAG v2 answered more answerable questions correctly than Standard RAG on held-out data**:
+   73.9 % vs 67.9 % (+6.1 points, 13 vs 3 discordant questions, p = 0.021). The gain comes from fewer wrong
+   abstentions (23 vs 32) while keeping the same correct-abstention rate on unanswerable questions (27/34 each) and a
+   similar wrong-answer count (20 vs 21).
+2. **Adaptive retrieval is the component that matters.** Without retries, the same pipeline is *below* Standard RAG
+   (63.0 %; its round-1 verification turns "insufficient" drafts into abstentions); with retries it is above.
+3. **The MAIN-RAG-style evidence filter adds little on this data**: v2 vs v2-without-filtering is 7 vs 5 (p = 0.77).
+   It raises evidence precision (58.9 % vs 53.5 %) but costs ~6 extra LLM calls per question on average.
+4. **The v2 verifier fixes the v1 failure**: v2 beats v1 by 23 vs 7 questions (p = 0.005); v1 again had the most
+   wrong abstentions (48).
+5. **Cost:** 59 % of questions (117/199) were answered in one round (1.4 LLM calls, 4.8 s on average); the 82
+   escalated questions averaged 20.5 LLM calls and 30 s. Mean latency is 4.2× Standard RAG's.
+6. Standard RAG's repeat consistency (17/20 identical answers) shows that Ollama generation is not perfectly
+   deterministic even at temperature 0 with a fixed seed.
+
+### What this does **not** show
+
+* It is one dataset family, one 4B model and 199 questions; the confidence interval of a 6-point difference at this
+  size is wide, and p = 0.021 is not a guarantee of the same gain elsewhere.
+* "Unanswerable" means the answer is absent from the truncated evidence; correct abstention did not improve.
+* Support/verified rates come from this project's own verifier; selective accuracy is *lower* for v2 than for v1 or
+  the no-filter variant because v2 answers more of the hard questions.
+* Results are not comparable with the MAIN-RAG paper's numbers (different model, retriever, corpus and sample).

@@ -140,6 +140,7 @@ def run_evaluation(
     questions = select_questions(dataset.questions, limit, seed)
     run_id = run_id or f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
     started = datetime.now(timezone.utc)
+    commit_at_start = _git_commit()  # the code that actually runs (later commits do not affect a running process)
     t0 = time.perf_counter()
     kb = open_benchmark_kb(settings, models, dataset)
     try:
@@ -208,7 +209,7 @@ def run_evaluation(
         "method_labels": {m: VARIANT_LABELS[m] for m in methods},
         "variant_settings": {m: VARIANTS[m][1] for m in methods},
         "consistency": consistency,
-        "software": {"adaptive_rag": __version__, "git_commit": _git_commit()},
+        "software": {"adaptive_rag": __version__, "git_commit": commit_at_start},
         "rows": rows,
     }
 

@@ -96,11 +96,11 @@ tests with the real models, frontend lint/build, and live end-to-end runs. See [
 ## D. Results and limitations
 
 **21. What did you find?**
-On the synthetic smoke set both methods were perfect. On 100 TriviaQA questions Standard RAG reached 78.9 % accuracy and
-Adaptive RAG 68.4 %: the adaptive pipeline abstained more often because its NLI verifier mislabelled short correct
-answers (bare names) as contradicted. It recovered 4 answers Standard missed, but lost 12, at ~2.6× the latency. The
-gap is not significant at n = 100 (sign test p ≈ 0.08). The lesson: verification only helps if the verifier is
-reliable; the fix (no contradiction signal for ill-formed hypotheses) is future work and must be evaluated on new questions.
+On 199 held-out TriviaQA questions, Multi-Agent RAG v2 reached 73.9 % accuracy vs 67.9 % for Standard RAG (13 vs 3
+discordant questions, exact McNemar p = 0.021), mainly through fewer wrong refusals (23 vs 32), with the same
+correct-abstention rate and 4.2× the mean latency. The ablations show the adaptive retries carry the gain; the
+MAIN-RAG-style filter adds little here (p = 0.77). The original v1 had been worse than Standard RAG because its
+verifier rejected correct short answers — fixed in v2.
 
 **22. Does your system eliminate hallucination?**
 No. It reduces the chance of returning unsupported answers by verifying and abstaining, but the verifier itself can make
