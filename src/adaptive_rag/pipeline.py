@@ -201,7 +201,9 @@ class RAGSystem:
             with _Timer() as t:
                 try:
                     package = self.evidence_agent.retrieve(plan, judge_cache)
-                    step_status, step_note = "completed", "Scores rank and filter passages; they do not prove claims."
+                    step_status = "completed"
+                    step_note = ("Judge scores rank and filter passages; they do not prove claims." if package.report
+                                 else "Retrieval scores rank passages; they do not prove claims.")
                 except Exception as exc:  # retrieval failure: recorded, then handled like "no evidence"
                     package = EvidencePackage(evidence=[], summary={"error": f"{exc.__class__.__name__}: {exc}"})
                     step_status, step_note = "failed", f"Retrieval failed: {exc.__class__.__name__}: {exc}"

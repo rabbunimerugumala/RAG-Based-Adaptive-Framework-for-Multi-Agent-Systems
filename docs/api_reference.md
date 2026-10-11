@@ -7,14 +7,16 @@ No authentication (local prototype).
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | Backend status, mode, model readiness, knowledge-base size, configuration |
+| GET | `/api/ready` | 200 when the generator can answer, 503 otherwise |
 | GET | `/api/documents` | List indexed documents |
 | POST | `/api/documents` | Upload one or more files (multipart field `files`) |
 | DELETE | `/api/documents/{doc_id}` | Delete a document and its chunks |
-| POST | `/api/query` | Run one question with `standard` or `adaptive` |
+| POST | `/api/query` | Run one question with `adaptive` (Multi-Agent RAG, default) or `standard` (baseline) |
 | POST | `/api/compare` | Run both methods on the same question |
 | GET | `/api/runs?limit=20` | Recent runs (summary) |
 | GET | `/api/runs/{run_id}` | One full run including its trace |
 | GET | `/api/datasets` | Benchmark datasets with usable-question counts |
+| GET | `/api/variants` | Systems that can be evaluated: `standard`, `adaptive`, `adaptive_no_retry`, `adaptive_no_filter`, `adaptive_v1` |
 | POST | `/api/evaluations` | Start a benchmark in the background |
 | GET | `/api/evaluations` | List running and saved evaluations |
 | GET | `/api/evaluations/{id}` | Progress, per-question rows and summary |
@@ -34,8 +36,8 @@ curl.exe -F "files=@data/sample_documents/college_library_rules.txt" http://127.
 $body = @{ question = "What is the fine for an overdue book?"; method = "adaptive" } | ConvertTo-Json
 Invoke-RestMethod http://127.0.0.1:8000/api/query -Method Post -ContentType "application/json" -Body $body
 
-# start an evaluation of 10 questions
-$body = @{ dataset = "smoke_test"; limit = 10; methods = @("standard","adaptive") } | ConvertTo-Json
+# start an evaluation of 10 questions (add ablations as extra methods; repeat = consistency re-runs)
+$body = @{ dataset = "smoke_test"; limit = 10; methods = @("standard","adaptive","adaptive_no_retry"); repeat = 3 } | ConvertTo-Json
 Invoke-RestMethod http://127.0.0.1:8000/api/evaluations -Method Post -ContentType "application/json" -Body $body
 ```
 
@@ -70,6 +72,17 @@ Response (`QueryResponse`, abridged):
   "models": {"generator": "ollama:qwen3:4b-instruct-2507-q4_K_M", "embedder": "BAAI/bge-small-en-v1.5", "nli": "...", "reranker": "none"}
 }
 ```
+
+Multi-Agent fields (v2):
+
+| Field | Meaning |
+|---|---|
+| `support_level` | `verified` (all claims supported), `partial` (some unresolved), `unverified`, `none` (no answer) |
+| `unresolved_claims` | claims of a partial answer that the evidence did not confirm |
+| `evidence[].judge_score` | evidence-judge log-odds log P(Yes) − log P(No), present when the Evidence Agent escalated to judged filtering |
+| `evidence[].retrieval_rank`, `filter_reason`, `candidate_answer` | rank before judging; why a passage was removed; per-passage predictor answer (triplet mode) |
+| `filtered_evidence` | passages the Evidence Agent removed (duplicates, below τ_q, over budget) |
+| `evidence_filter` | `{mode, pool_size, duplicates_removed, threshold, mean, std, n_sigma, retained, filtered, fallback, judge_calls}` or `null` when no judging ran |
 
 For Standard RAG, `confidence` is `null` and `verification` is post-hoc analysis (`verification_used_in_decision: false`).
 

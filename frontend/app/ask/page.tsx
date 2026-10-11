@@ -2,7 +2,8 @@
 
 import { Network, Send, Square } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useHealth } from "@/components/providers";
 import { AnswerCard, ConfidenceCard, EvidenceList, VerificationCard } from "@/components/result-views";
 import { Button, Card, Notice, PageHeader, SegmentedControl, Spinner } from "@/components/ui";
@@ -12,6 +13,11 @@ import type { Method, QueryResponse } from "@/lib/types";
 const LAST_KEY = "arag-last-ask";
 
 export default function AskPage() {
+  return <Suspense fallback={<Spinner label="Loading…" />}><AskView /></Suspense>;
+}
+
+function AskView() {
+  const runParam = useSearchParams().get("run");
   const { health } = useHealth();
   const [question, setQuestion] = useState("");
   const [method, setMethod] = useState<Method>("adaptive");
@@ -20,14 +26,18 @@ export default function AskPage() {
   const [loading, setLoading] = useState(false);
   const ctrl = useRef<AbortController | null>(null);
 
-  // restore the last result when navigating back from the trace page
+  // deep link /ask?run=<id> shows a saved run; otherwise restore the last result of this browser session
   useEffect(() => {
+    if (runParam) {
+      api.run(runParam).then(setResult).catch((e: Error) => setError(e.message));
+      return;
+    }
     try {
       const saved = sessionStorage.getItem(LAST_KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore from browser storage
       if (saved) setResult(JSON.parse(saved));
     } catch { /* storage unavailable */ }
-  }, []);
+  }, [runParam]);
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();

@@ -23,7 +23,8 @@ const SERIES: Record<string, { label: string; color: string }> = {
 };
 
 export function MetricsChart({ summary, methods }: { summary: Record<string, MetricSummary>; methods: string[] }) {
-  const labelSize = methods.length > 3 ? 8 : 10;
+  // direct value labels only for <= 2 systems (more would collide); the tooltip and the table carry all values
+  const labelSize = 10;
   const data = CHART_METRICS.map(([key, label]) => {
     const row: Record<string, string | number | null> = { metric: label };
     methods.forEach((m) => { row[m] = summary[m]?.[key] ?? null; });
@@ -45,10 +46,12 @@ export function MetricsChart({ summary, methods }: { summary: Record<string, Met
             contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
             labelStyle={{ color: "var(--text)", fontWeight: 600 }}
           />
-          <Legend formatter={(v) => <span style={{ color: "var(--muted)", fontSize: 12 }}>{SERIES[v]?.label ?? v}</span>} />
+          <Legend itemSorter={null} formatter={(v) => <span style={{ color: "var(--muted)", fontSize: 12 }}>{SERIES[v]?.label ?? v}</span>} />
           {methods.map((m) => (
-            <Bar key={m} dataKey={m} fill={SERIES[m]?.color} radius={[4, 4, 0, 0]} maxBarSize={36} stroke="var(--surface)" strokeWidth={1}>
-              <LabelList dataKey={m} position="top" formatter={pct} style={{ fill: "var(--muted)", fontSize: labelSize }} />
+            <Bar key={m} dataKey={m} fill={SERIES[m]?.color} radius={[4, 4, 0, 0]} maxBarSize={36} stroke="var(--surface)" strokeWidth={1} isAnimationActive={false}>
+              {methods.length <= 2 && (
+                <LabelList dataKey={m} position="top" formatter={pct} style={{ fill: "var(--muted)", fontSize: labelSize }} />
+              )}
             </Bar>
           ))}
         </BarChart>

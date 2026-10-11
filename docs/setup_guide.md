@@ -121,18 +121,33 @@ cd frontend; npm run lint; npm run build; cd ..
 
 ```powershell
 python evaluation/validate_dataset.py                                   # lists datasets and usable questions
+
+# quick smoke test (24 synthetic questions, ~5 min in real mode)
 python evaluation/run_benchmark.py --dataset smoke_test --mode real
 
-python evaluation/prepare_triviaqa.py --n 100                           # needs the [datasets] extra and internet
-python evaluation/run_benchmark.py --dataset triviaqa_unfiltered_sample --mode real
-python evaluation/run_benchmark.py --dataset triviaqa_unfiltered_sample --limit 30 --mode real   # quicker sample
+# TriviaQA samples (need the [datasets] extra and internet once)
+python evaluation/prepare_triviaqa.py --n 100                                                   # development set
+python evaluation/prepare_triviaqa.py --offset 100 --n 200 --out data/datasets/triviaqa_heldout_101_300 `
+    --exclude-dataset data/datasets/triviaqa_unfiltered_sample                                  # held-out test
+
+# the full held-out comparison: baseline, proposed system and ablations (~3 h on the reference laptop)
+python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real `
+    --methods standard,adaptive,adaptive_no_retry,adaptive_no_filter,adaptive_v1 --repeat 20
+
+# a quicker comparison of only the baseline and the proposed system on 50 questions
+python evaluation/run_benchmark.py --dataset triviaqa_heldout_101_300 --mode real --methods standard,adaptive --limit 50
+
+# recompute metrics and paired McNemar tests from saved per-question rows
+python evaluation/analyze_results.py <run_id>
 ```
 
-Results are written to `evaluation/results/<run_id>/results.json` (configuration, models, per-question rows,
-summary) and `results.csv`. They can also be started and downloaded from the **Evaluation** page.
+Results are written to `evaluation/results/<run_id>/results.json` (configuration, variant settings, model names,
+git commit, per-question rows with per-attempt drafts, summaries) and `results.csv`. Runs can also be started and
+downloaded on the **Evaluation** page.
 
 > Qdrant local mode allows one process per index folder. Do not run the CLI benchmark on a dataset while the API
-> server is running an evaluation of the same dataset.
+> server is running an evaluation of the same dataset. Avoid using the app during a benchmark: it shares the GPU and
+> changes the measured latency.
 
 ## 11. Troubleshooting
 

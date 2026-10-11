@@ -1,7 +1,8 @@
 "use client";
 
 import { Download, Play, Square } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, CardHeader, EmptyState, Notice, PageHeader, Spinner, Stat, cn } from "@/components/ui";
 import { api, ApiError, fmt } from "@/lib/api";
 import type { DatasetInfo, EvalJob, EvalRow, Variant } from "@/lib/types";
@@ -46,6 +47,12 @@ function Outcome({ r }: { r: EvalRow }) {
 }
 
 export default function EvaluationPage() {
+  // useSearchParams needs a Suspense boundary so the page shell can be prerendered
+  return <Suspense fallback={<Spinner label="Loading…" />}><EvaluationView /></Suspense>;
+}
+
+function EvaluationView() {
+  const runParam = useSearchParams().get("run");
   const [datasets, setDatasets] = useState<DatasetInfo[] | null>(null);
   const [jobs, setJobs] = useState<EvalJob[]>([]);
   const [dataset, setDataset] = useState("");
@@ -65,7 +72,9 @@ export default function EvaluationPage() {
     }).catch((e: Error) => { setDatasets([]); setError(e.message); });
     api.variants().then(setVariants).catch(() => setVariants([]));
     loadJobs();
-  }, [loadJobs]);
+    // deep link: /evaluation?run=<id> opens a saved run
+    if (runParam) api.evaluation(runParam).then(setJob).catch((e: Error) => setError(e.message));
+  }, [loadJobs, runParam]);
 
   // poll the selected job while it is running
   useEffect(() => {
@@ -101,7 +110,7 @@ export default function EvaluationPage() {
 
   return (
     <>
-      <PageHeader title="Evaluation" description="Run both methods on the same benchmark questions against the same benchmark knowledge base (kept separate from your uploads). Every number shown is computed from the actual run." />
+      <PageHeader title="Evaluation" description="Run the Standard RAG baseline, the proposed Multi-Agent RAG and optional ablations on the same benchmark questions and the same benchmark knowledge base (kept separate from your uploads). Every number shown is computed from the actual run." />
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="h-fit">
@@ -217,7 +226,7 @@ export default function EvaluationPage() {
 
           {res && (
             <Card>
-              <CardHeader title="Results by method" description={`n = ${res.sample.num_questions} questions per method; identical questions for both methods`} />
+              <CardHeader title="Results by method" description={`n = ${res.sample.num_questions} questions per method; identical questions for every system`} />
               <div className="p-5"><MetricsChart summary={res.summary} methods={res.methods} /></div>
               <div className="overflow-x-auto border-t border-border px-5 py-3">
                 <table className="w-full min-w-[440px] text-sm">
